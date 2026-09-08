@@ -1,0 +1,22 @@
+const { Sequelize } = require('sequelize');
+require('dotenv').config();
+
+const sequelize = new Sequelize(
+  process.env.DB_NAME,
+  process.env.DB_USER,
+  process.env.DB_PASS,
+  {
+    host: 'localhost',
+    dialect: 'mssql',
+    dialectOptions: {
+      options: {
+        instanceName: 'SQLEXPRESS', // Tên Instance SQL Server của bạn
+        encrypt: false,
+        trustServerCertificate: true
+      }
+    },
+    logging: false
+  }
+);
+
+module.exports = sequelize;

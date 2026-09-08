@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Database Console - Computer Store</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
+
+  <!-- Header Bar -->
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shadow-md">
+    <div class="flex items-center space-x-3">
+      <i class="fa-solid fa-fire text-amber-500 text-2xl"></i>
+      <span class="font-bold text-lg tracking-wide text-white">Computer Store Console</span>
+      <span class="bg-slate-800 text-amber-400 text-xs px-2.5 py-0.5 rounded-full font-mono border border-amber-500/30">computer_store_db</span>
+    </div>
+    <div class="flex items-center space-x-4 text-sm text-slate-400">
+      <span><i class="fa-solid fa-server text-emerald-400 mr-1.5"></i>http://localhost:5000/api</span>
+    </div>
+  </header>
+
+  <!-- Main Body -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900/90 border-r border-slate-800 flex flex-col">
+      <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Collections</span>
+        <i class="fa-solid fa-database text-slate-500 text-sm"></i>
+      </div>
+      <nav id="collection-list" class="flex-1 overflow-y-auto p-2 space-y-1"></nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+      
+      <!-- Toolbar -->
+      <div class="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <h2 id="current-collection-title" class="text-xl font-bold text-white capitalize">Categories</h2>
+          <span id="record-count" class="bg-slate-800 text-slate-300 text-xs px-2.5 py-1 rounded-md border border-slate-700">0 documents</span>
+        </div>
+        <div class="flex items-center space-x-3">
+          <button onclick="openAddModal()" class="bg-amber-600 hover:bg-amber-500 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-lg shadow-amber-600/20">
+            <i class="fa-solid fa-plus"></i> Add Document
+          </button>
+          <button onclick="fetchCollectionData()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-sm border border-slate-700 transition flex items-center gap-2">
+            <i class="fa-solid fa-rotate-right"></i> Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Table Area -->
+      <div class="flex-1 overflow-auto p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead id="table-head" class="bg-slate-800/90 text-slate-400 uppercase text-xs border-b border-slate-700 sticky top-0 z-10 backdrop-blur"></thead>
+            <tbody id="table-body" class="divide-y divide-slate-800/60"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Modal Add / Edit -->
+  <div id="crud-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+        <h3 id="modal-title" class="text-lg font-bold text-white">Add Document</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="crud-form" onsubmit="handleFormSubmit(event)" class="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div id="form-fields" class="space-y-3"></div>
+        <div class="pt-4 border-t border-slate-800 flex justify-end space-x-3">
+          <button type="button" onclick="closeModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm font-bold text-white">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:5000/api';
+    
+    // Schema chuẩn xác 100% cột
+    const schemaMap = {
+      'categories': { pk: 'CategoryID', fields: ['CategoryName'] },
+      'products': { pk: 'ProductID', fields: ['ProductName', 'Description', 'Price', 'DiscountPrice', 'StockQuantity', 'ImageUrl', 'CategoryID', 'CPU', 'RAM', 'Storage', 'Display'] },
+      'product-variants': { pk: 'VariantID', fields: ['ProductID', 'Color', 'Configuration', 'Price', 'StockQuantity'] },
+      'vouchers': { pk: 'VoucherID', fields: ['Code', 'Name', 'ImageUrl', 'DiscountPercentage', 'MaxDiscountAmount', 'ExpiryDate', 'IsActive'] },
+      'promotions': { pk: 'PromotionID', fields: ['Title', 'Description', 'ImageUrl'] },
+      'users': { pk: 'UserID', fields: ['FullName', 'Email', 'PasswordHash', 'Phone', 'Role'] },
+      'cart': { pk: 'ID', fields: ['UserID', 'ProductID', 'Quantity', 'Price'] },
+      'orders': { pk: 'OrderID', fields: ['UserID', 'OrderDate', 'Status', 'TotalAmount', 'RecipientName', 'RecipientPhone', 'ShippingAddress', 'Note', 'PaymentMethod', 'DiscountAmount'] },
+      'order-items': { pk: 'OrderItemID', fields: ['OrderID', 'ProductID', 'Quantity', 'UnitPrice'] },
+      'reviews': { pk: 'ReviewID', fields: ['ProductID', 'UserID', 'Rating', 'Comment', 'ReviewDate'] },
+      'build-pc': { pk: 'BuildPCID', fields: ['UserID', 'BuildName', 'TotalPrice'] }
+    };
+
+    const collections = [
+      { name: 'categories', label: 'Categories', icon: 'fa-layer-group' },
+      { name: 'products', label: 'Products', icon: 'fa-box' },
+      { name: 'product-variants', label: 'Product Variants', icon: 'fa-cubes' },
+      { name: 'vouchers', label: 'Vouchers', icon: 'fa-ticket' },
+      { name: 'promotions', label: 'Promotions', icon: 'fa-rectangle-ad' },
+      { name: 'users', label: 'Users', icon: 'fa-users' },
+      { name: 'cart', label: 'Cart Items', icon: 'fa-cart-shopping' },
+      { name: 'orders', label: 'Orders', icon: 'fa-receipt' },
+      { name: 'order-items', label: 'Order Items', icon: 'fa-list-check' },
+      { name: 'reviews', label: 'Reviews', icon: 'fa-star' },
+      { name: 'build-pc', label: 'Build PC', icon: 'fa-desktop' }
+    ];
+
+    let activeCollection = collections[0].name;
+    let currentData = [];
+    let editingId = null;
+
+    function renderSidebar() {
+      document.getElementById('collection-list').innerHTML = collections.map(col => `
+        <button onclick="switchCollection('${col.name}')" 
+                class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${col.name === activeCollection ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}">
+          <i class="fa-solid ${col.icon} w-5 text-center"></i>
+          <span>${col.label}</span>
+        </button>
+      `).join('');
+    }
+
+    function switchCollection(name) {
+      activeCollection = name;
+      renderSidebar();
+      document.getElementById('current-collection-title').innerText = collections.find(c => c.name === name).label;
+      fetchCollectionData();
+    }
+
+    async function fetchCollectionData() {
+      const tbody = document.getElementById('table-body');
+      const thead = document.getElementById('table-head');
+      const countBadge = document.getElementById('record-count');
+      const schema = schemaMap[activeCollection] || { pk: 'id', fields: [] };
+
+      tbody.innerHTML = `<tr><td class="p-8 text-center text-slate-500" colspan="100%"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i>Loading...</td></tr>`;
+
+      try {
+        const res = await fetch(`${API_BASE}/${activeCollection}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        currentData = await res.json();
+
+        countBadge.innerText = `${currentData.length} documents`;
+
+        let allColumns = [];
+        if (Array.isArray(currentData) && currentData.length > 0) {
+          allColumns = Object.keys(currentData[0]).filter(k => typeof currentData[0][k] !== 'object' || currentData[0][k] === null);
+        } else {
+          allColumns = [schema.pk, ...schema.fields];
+        }
+
+        thead.innerHTML = `
+          <tr>
+            ${allColumns.map(col => `<th class="p-3.5 font-semibold tracking-wider whitespace-nowrap">${col}</th>`).join('')}
+            <th class="p-3.5 font-semibold tracking-wider text-right">Actions</th>
+          </tr>
+        `;
+
+        if (!Array.isArray(currentData) || currentData.length === 0) {
+          tbody.innerHTML = `<tr><td class="p-8 text-center text-slate-500" colspan="100%">Collection is empty. Click "Add Document" to insert data.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = currentData.map(row => {
+          const rowId = row[schema.pk] || row[allColumns[0]];
+          return `
+            <tr class="hover:bg-slate-800/50 transition border-b border-slate-800/40">
+              ${allColumns.map(col => {
+                let val = row[col];
+                return `<td class="p-3.5 whitespace-nowrap text-slate-300">${val ?? '<span class="text-slate-600 italic">null</span>'}</td>`;
+              }).join('')}
+              <td class="p-3.5 whitespace-nowrap text-right space-x-1">
+                <button onclick='openEditModal("${rowId}")' class="text-amber-400 hover:text-amber-300 px-2 py-1 rounded hover:bg-amber-950/40 transition" title="Edit">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick='deleteDocument("${rowId}")' class="text-rose-400 hover:text-rose-300 px-2 py-1 rounded hover:bg-rose-950/40 transition" title="Delete">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td class="p-8 text-center text-rose-400" colspan="100%"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Error: ${err.message}</td></tr>`;
+      }
+    }
+
+    // Mở Modal Thêm mới
+    function openAddModal() {
+      editingId = null;
+      document.getElementById('modal-title').innerText = `Add to ${activeCollection}`;
+      const schema = schemaMap[activeCollection] || { fields: [] };
+      
+      document.getElementById('form-fields').innerHTML = schema.fields.map(field => `
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 mb-1 uppercase">${field}</label>
+          <input type="text" name="${field}" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-amber-500" placeholder="Enter ${field}">
+        </div>
+      `).join('');
+
+      document.getElementById('crud-modal').classList.remove('hidden');
+    }
+
+    // Mở Modal Sửa (Edit)
+    function openEditModal(id) {
+      editingId = id;
+      const schema = schemaMap[activeCollection] || { pk: 'id', fields: [] };
+      const row = currentData.find(item => String(item[schema.pk]) === String(id));
+
+      if (!row) return alert('Cannot find item data');
+
+      document.getElementById('modal-title').innerText = `Edit ${activeCollection} (#${id})`;
+
+      const allFields = [schema.pk, ...schema.fields];
+      document.getElementById('form-fields').innerHTML = allFields.map(field => {
+        const isPk = field === schema.pk;
+        const val = row[field] ?? '';
+        return `
+          <div>
+            <label class="block text-xs font-semibold ${isPk ? 'text-amber-500' : 'text-slate-400'} mb-1 uppercase">${field} ${isPk ? '(ID - Readonly)' : ''}</label>
+            <input type="text" name="${field}" value="${val}" ${isPk ? 'readonly class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-slate-500 cursor-not-allowed"' : 'class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-sm text-white focus:outline-none focus:border-amber-500"'}>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('crud-modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('crud-modal').classList.add('hidden');
+    }
+
+    // Submit Thêm / Sửa
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const payload = {};
+      formData.forEach((value, key) => { 
+        if (value.trim() !== '') payload[key] = value; 
+      });
+
+      const isEdit = editingId !== null;
+      const url = isEdit ? `${API_BASE}/${activeCollection}/${editingId}` : `${API_BASE}/${activeCollection}`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      try {
+        const res = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error(isEdit ? 'Failed to update document (Check if PUT endpoint exists)' : 'Failed to save document');
+        closeModal();
+        fetchCollectionData();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // Xóa Document
+    async function deleteDocument(id) {
+      if (!confirm(`Are you sure you want to delete item with ID: ${id}?`)) return;
+      try {
+        const res = await fetch(`${API_BASE}/${activeCollection}/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        fetchCollectionData();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    renderSidebar();
+    switchCollection(activeCollection);
+  </script>
+</body>
+</html>
