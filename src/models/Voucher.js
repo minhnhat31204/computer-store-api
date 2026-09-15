@@ -8,7 +8,13 @@ const Voucher = sequelize.define('Voucher', {
   ImageUrl: { type: DataTypes.STRING },
   DiscountPercentage: { type: DataTypes.FLOAT },
   MaxDiscountAmount: { type: DataTypes.DECIMAL(18, 2) },
-  ExpiryDate: { type: DataTypes.DATE },
+  ExpiryDate: { 
+    type: DataTypes.DATE,
+    get() {
+      const rawValue = this.getDataValue('ExpiryDate');
+      return rawValue ? rawValue.toISOString().split('T')[0] : null;
+    }
+  },
   IsActive: { type: DataTypes.BOOLEAN, defaultValue: true }
 }, { timestamps: false });
 

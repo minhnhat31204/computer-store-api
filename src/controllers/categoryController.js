@@ -11,7 +11,13 @@ exports.getAll = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const newItem = await Category.create(req.body);
+    const { CategoryName, ImageUrl } = req.body;
+    
+    const newItem = await Category.create({
+      CategoryName,
+      ImageUrl
+    });
+    
     res.status(201).json(newItem);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -30,7 +36,13 @@ exports.delete = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const { id } = req.params;
-    await Category.update(req.body, { where: { CategoryID: id } });
+    const { CategoryName, ImageUrl } = req.body;
+
+    await Category.update(
+      { CategoryName, ImageUrl },
+      { where: { CategoryID: id } }
+    );
+    
     res.status(200).json({ message: 'Updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });

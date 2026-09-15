@@ -5,6 +5,7 @@ const { sequelize } = require('./src/models');
 require('dotenv').config();
 
 const app = express();
+const favoriteRoutes = require('./src/routes/favoriteRoutes');
 
 app.use(cors());
 app.use(express.json());
@@ -21,7 +22,9 @@ app.use('/api/cart', require('./src/routes/cartRoutes'));
 app.use('/api/orders', require('./src/routes/orderRoutes'));
 app.use('/api/order-items', require('./src/routes/orderItemRoutes')); // Nơi hay bị thiếu
 app.use('/api/reviews', require('./src/routes/reviewRoutes'));
-app.use('/api/build-pc', require('./src/routes/buildPcRoutes'));
+// app.use('/api/build-pc', require('./src/routes/buildPcRoutes'));
+app.use('/api/auth', require('./src/routes/authRoutes'));
+app.use('/api/favorites', favoriteRoutes);
 
 const PORT = process.env.PORT || 5000;
 

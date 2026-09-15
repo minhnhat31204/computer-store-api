@@ -12,10 +12,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "axios": "^1.20.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "mysql2": "^3.24.3",
+    "nodemailer": "^10.0.1",
     "sequelize": "^6.37.8",
     "tedious": "^20.0.0"
   },

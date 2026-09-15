@@ -2,7 +2,8 @@ const { User } = require('../models');
 
 exports.getAll = async (req, res) => {
   try {
-    const data = await User.findAll({ attributes: { exclude: ['PasswordHash'] } });
+    // Không cần exclude PasswordHash nữa
+    const data = await User.findAll();
     res.status(200).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -33,5 +34,22 @@ exports.delete = async (req, res) => {
     res.status(200).json({ message: 'Deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+exports.checkPhone = async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    // Tìm user theo SĐT trong Database
+    const user = await User.findOne({ where: { Phone: phone } });
+
+    if (user) {
+      return res.status(200).json({ user: user });
+    } else {
+      return res.status(200).json({ user: null });
+    }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };

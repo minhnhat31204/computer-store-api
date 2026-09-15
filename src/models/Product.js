@@ -15,7 +15,9 @@ const Product = sequelize.define('Product', {
   RAM: { type: DataTypes.STRING },
   Storage: { type: DataTypes.STRING },
   Display: { type: DataTypes.STRING },
-  RefreshRate: { type: DataTypes.STRING }
+  RefreshRate: { type: DataTypes.STRING },
+  
+  Series: { type: DataTypes.STRING }
 }, { timestamps: false });
 
 module.exports = Product;

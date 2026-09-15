@@ -2,6 +2,7 @@ const router = require('express').Router();
 const c = require('../controllers/orderController');
 
 router.get('/', c.getAll);
+router.get('/user/:userId', c.getByUserId); // Thêm route này nếu App Flutter lấy theo UserID
 router.post('/', c.create);
 router.put('/:id', c.update);
 router.delete('/:id', c.delete);

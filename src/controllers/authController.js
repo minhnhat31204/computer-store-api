@@ -1,0 +1,94 @@
+const { User } = require('../models');
+const nodemailer = require('nodemailer');
+
+// Lưu trữ OTP tạm thời trong bộ nhớ (Production nên lưu CSDL/Redis)
+const otpStore = {}; 
+
+// Đăng ký
+exports.register = async (req, res) => {
+  try {
+    const {fullName, email, password, phone} = req.body;
+    const newUser = await User.create({ FullName: fullName, Email: email, PasswordHash: password, Phone: phone });
+    res.status(201).json({ message: 'Đăng ký thành công', user: newUser });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// Đăng nhập
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ where: { Email: email, PasswordHash: password } });
+    if (!user) return res.status(401).json({ error: 'Email hoặc mật khẩu không đúng' });
+    res.status(200).json({ message: 'Đăng nhập thành công', user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Gửi mã OTP Quên Mật Khẩu
+exports.forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ where: { Email: email } });
+  if (!user) return res.status(404).json({ error: 'Email không tồn tại trong hệ thống' });
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  otpStore[email] = { otp, expires: Date.now() + 5 * 60 * 1000 }; // Mã hết hạn sau 5 phút
+
+  // Cấu hình Nodemailer gửi mail
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: 'YOUR_EMAIL@gmail.com', // Thay bằng email của bạn
+      pass: 'YOUR_APP_PASSWORD'      // Mật khẩu ứng dụng Gmail (App Password)
+    }
+  });
+
+  await transporter.sendMail({
+    from: '"MANB SHOP" <YOUR_EMAIL@gmail.com>',
+    to: email,
+    subject: 'Mã xác thực OTP - Đặt lại mật khẩu MANB SHOP',
+    text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp}. Mã có hiệu lực trong 5 phút.`
+  });
+
+  res.status(200).json({ message: 'Mã OTP đã được gửi đến email của bạn' });
+};
+
+// Đặt lại mật khẩu bằng OTP
+exports.resetPasswordOTP = async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+  const record = otpStore[email];
+
+  if (!record || record.otp !== otp || Date.now() > record.expires) {
+    return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn' });
+  }
+
+  await User.update({ PasswordHash: newPassword }, { where: { Email: email } });
+  delete otpStore[email];
+  res.status(200).json({ message: 'Đặt lại mật khẩu thành công' });
+};
+
+// Đăng nhập / Đăng ký bằng Google
+exports.googleLogin = async (req, res) => {
+  try {
+    const { fullName, email, avatar } = req.body;
+
+    // Tìm xem user đã tồn tại trong DB theo Email chưa
+    let user = await User.findOne({ where: { Email: email } });
+
+    if (!user) {
+      // Nếu chưa có thì tự động tạo mới
+      user = await User.create({
+        FullName: fullName,
+        Email: email,
+        Avatar: avatar,
+        Role: 'Customer'
+      });
+    }
+
+    res.status(200).json({ message: 'Thành công', user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
