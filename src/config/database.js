@@ -6,11 +6,11 @@ const sequelize = new Sequelize(
   process.env.DB_USER,
   process.env.DB_PASS,
   {
-    host: 'localhost',
+    host: process.env.DB_HOST || 'localhost',
+    port: 1433,
     dialect: 'mssql',
     dialectOptions: {
-      options: {
-        instanceName: 'SQLEXPRESS', // Tên Instance SQL Server của bạn
+      options: { // Tên Instance SQL Server của bạn
         encrypt: false,
         trustServerCertificate: true
       }
