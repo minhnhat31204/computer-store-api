@@ -10,3 +10,5 @@ const OrderItem = sequelize.define('OrderItem', {
 }, { timestamps: false });
 
 module.exports = OrderItem;
+
+

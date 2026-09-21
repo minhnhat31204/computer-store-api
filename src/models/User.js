@@ -9,9 +9,11 @@ const User = sequelize.define('User', {
   Avatar: { type: DataTypes.STRING },
   Address: { type: DataTypes.STRING },
   Gender: { type: DataTypes.STRING },
-  Birthday: { type: DataTypes.DATEONLY }, // DATEONLY chỉ lưu Ngày/Tháng/Năm
+  Birthday: { type: DataTypes.DATEONLY }, // DATEONLY chá»‰ lÆ°u NgÃ y/ThÃ¡ng/NÄƒm
   Role: { type: DataTypes.STRING, defaultValue: 'Customer' },
   CreatedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
 }, { timestamps: false });
 
 module.exports = User;
+
+

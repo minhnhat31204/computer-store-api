@@ -10,3 +10,5 @@ const CartItemDB = sequelize.define('CartItemDB', {
 }, { timestamps: false });
 
 module.exports = CartItemDB;
+
+

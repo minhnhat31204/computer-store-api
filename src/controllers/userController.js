@@ -2,7 +2,7 @@ const { User } = require('../models');
 
 exports.getAll = async (req, res) => {
   try {
-    // Không cần exclude PasswordHash nữa
+    // KhÃ´ng cáº§n exclude PasswordHash ná»¯a
     const data = await User.findAll();
     res.status(200).json(data);
   } catch (err) {
@@ -41,7 +41,7 @@ exports.checkPhone = async (req, res) => {
   try {
     const { phone } = req.body;
 
-    // Tìm user theo SĐT trong Database
+    // TÃ¬m user theo SÄT trong Database
     const user = await User.findOne({ where: { Phone: phone } });
 
     if (user) {
@@ -53,3 +53,5 @@ exports.checkPhone = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+

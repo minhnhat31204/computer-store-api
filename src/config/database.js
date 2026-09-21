@@ -10,7 +10,7 @@ const sequelize = new Sequelize(
     port: 1433,
     dialect: 'mssql',
     dialectOptions: {
-      options: { // Tên Instance SQL Server của bạn
+      options: { // TÃªn Instance SQL Server cá»§a báº¡n
         encrypt: false,
         trustServerCertificate: true
       }
@@ -20,3 +20,5 @@ const sequelize = new Sequelize(
 );
 
 module.exports = sequelize;
+
+

@@ -1,13 +1,13 @@
 const { Review, User, Product } = require('../models');
 
-// Lấy danh sách đánh giá của sản phẩm kèm tên và avatar người dùng
+// Láº¥y danh sÃ¡ch Ä‘Ã¡nh giÃ¡ cá»§a sáº£n pháº©m kÃ¨m tÃªn vÃ  avatar ngÆ°á»i dÃ¹ng
 exports.getByProduct = async (req, res) => {
   try {
     const data = await Review.findAll({
       where: { ProductID: req.params.productId },
       include: [{ 
         model: User, 
-        attributes: ['FullName', 'Avatar'] // <--- Thêm 'Avatar' vào đây
+        attributes: ['FullName', 'Avatar'] // <--- ThÃªm 'Avatar' vÃ o Ä‘Ã¢y
       }],
       order: [['ReviewDate', 'DESC']]
     });
@@ -17,30 +17,30 @@ exports.getByProduct = async (req, res) => {
   }
 };
 
-// Kiểm tra người dùng đã đánh giá sản phẩm này trong đơn hàng chưa (Có kiểm tra trạng thái đơn hàng)
+// Kiá»ƒm tra ngÆ°á»i dÃ¹ng Ä‘Ã£ Ä‘Ã¡nh giÃ¡ sáº£n pháº©m nÃ y trong Ä‘Æ¡n hÃ ng chÆ°a (CÃ³ kiá»ƒm tra tráº¡ng thÃ¡i Ä‘Æ¡n hÃ ng)
 exports.checkEligibility = async (req, res) => {
   try {
     const { userId, productId, orderId } = req.query;
     if (!userId || !productId || !orderId) {
-      return res.status(400).json({ canReview: false, message: 'Thiếu tham số' });
+      return res.status(400).json({ canReview: false, message: 'Thiáº¿u tham sá»‘' });
     }
 
-    // 1. Kiểm tra đơn hàng có tồn tại và đã hoàn thành/giao thành công chưa
-    const { Order } = require('../models'); // Thêm model Order nếu chưa import ở đầu file
+    // 1. Kiá»ƒm tra Ä‘Æ¡n hÃ ng cÃ³ tá»“n táº¡i vÃ  Ä‘Ã£ hoÃ n thÃ nh/giao thÃ nh cÃ´ng chÆ°a
+    const { Order } = require('../models'); // ThÃªm model Order náº¿u chÆ°a import á»Ÿ Ä‘áº§u file
     const order = await Order.findOne({
       where: { OrderID: orderId, UserID: userId }
     });
 
     if (!order) {
-      return res.status(200).json({ canReview: false, reason: 'Không tìm thấy đơn hàng' });
+      return res.status(200).json({ canReview: false, reason: 'KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n hÃ ng' });
     }
 
     const status = (order.Status || '').toLowerCase();
-    if (status !== 'completed' && status !== 'delivered' && status !== 'đã giao') {
-      return res.status(200).json({ canReview: false, reason: 'Đơn hàng chưa hoàn thành' });
+    if (status !== 'completed' && status !== 'delivered' && status !== 'Ä‘Ã£ giao') {
+      return res.status(200).json({ canReview: false, reason: 'ÄÆ¡n hÃ ng chÆ°a hoÃ n thÃ nh' });
     }
 
-    // 2. Kiểm tra xem đã đánh giá sản phẩm này cho hóa đơn này chưa
+    // 2. Kiá»ƒm tra xem Ä‘Ã£ Ä‘Ã¡nh giÃ¡ sáº£n pháº©m nÃ y cho hÃ³a Ä‘Æ¡n nÃ y chÆ°a
     const existingReview = await Review.findOne({
       where: {
         UserID: userId,
@@ -55,15 +55,15 @@ exports.checkEligibility = async (req, res) => {
   }
 };
 
-// Thêm đánh giá mới
+// ThÃªm Ä‘Ã¡nh giÃ¡ má»›i
 exports.create = async (req, res) => {
   try {
     const { UserID, ProductID, OrderID } = req.body;
     
-    // Kiểm tra lần cuối trước khi tạo
+    // Kiá»ƒm tra láº§n cuá»‘i trÆ°á»›c khi táº¡o
     const existing = await Review.findOne({ where: { UserID, ProductID, OrderID } });
     if (existing) {
-      return res.status(400).json({ error: 'Bạn đã đánh giá sản phẩm này cho hóa đơn này rồi.' });
+      return res.status(400).json({ error: 'Báº¡n Ä‘Ã£ Ä‘Ã¡nh giÃ¡ sáº£n pháº©m nÃ y cho hÃ³a Ä‘Æ¡n nÃ y rá»“i.' });
     }
 
     const newItem = await Review.create(req.body);
@@ -73,20 +73,20 @@ exports.create = async (req, res) => {
   }
 };
 
-// Lấy toàn bộ danh sách đánh giá (cho Admin Dashboard)
+// Láº¥y toÃ n bá»™ danh sÃ¡ch Ä‘Ã¡nh giÃ¡ (cho Admin Dashboard)
 exports.getAll = async (req, res) => {
   try {
     const data = await Review.findAll({
-      order: [['ReviewID', 'DESC']] // Sắp xếp theo ReviewID giảm dần thay vì ReviewDate
+      order: [['ReviewID', 'DESC']] // Sáº¯p xáº¿p theo ReviewID giáº£m dáº§n thay vÃ¬ ReviewDate
     });
     res.status(200).json(data);
   } catch (err) {
-    console.error("Lỗi lấy danh sách Review:", err); // In chi tiết lỗi ra Terminal
+    console.error("Lá»—i láº¥y danh sÃ¡ch Review:", err); // In chi tiáº¿t lá»—i ra Terminal
     res.status(500).json({ error: err.message });
   }
 };
 
-// Xóa đánh giá theo ReviewID (cho Admin Dashboard)
+// XÃ³a Ä‘Ã¡nh giÃ¡ theo ReviewID (cho Admin Dashboard)
 exports.delete = async (req, res) => {
   try {
     const { id } = req.params;
@@ -95,11 +95,13 @@ exports.delete = async (req, res) => {
     });
 
     if (deleted) {
-      return res.status(200).json({ message: 'Xóa đánh giá thành công!' });
+      return res.status(200).json({ message: 'XÃ³a Ä‘Ã¡nh giÃ¡ thÃ nh cÃ´ng!' });
     }
-    return res.status(404).json({ error: 'Không tìm thấy đánh giá để xóa.' });
+    return res.status(404).json({ error: 'KhÃ´ng tÃ¬m tháº¥y Ä‘Ã¡nh giÃ¡ Ä‘á»ƒ xÃ³a.' });
   } catch (err) {
-    console.error("Lỗi xóa Review:", err);
+    console.error("Lá»—i xÃ³a Review:", err);
     res.status(500).json({ error: err.message });
   }
 };
+
+

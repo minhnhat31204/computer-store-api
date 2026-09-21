@@ -9,3 +9,5 @@ router.delete('/:id', c.delete);
 router.post('/check-phone', userController.checkPhone);
 
 module.exports = router;
+
+

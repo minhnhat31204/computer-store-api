@@ -1,6 +1,6 @@
 const { Favorite, Product } = require('../models');
 
-// 1. Lấy tất cả danh sách (Dành cho Admin Panel)
+// 1. Láº¥y táº¥t cáº£ danh sÃ¡ch (DÃ nh cho Admin Panel)
 exports.getAllFavorites = async (req, res) => {
   try {
     const favorites = await Favorite.findAll();
@@ -10,7 +10,7 @@ exports.getAllFavorites = async (req, res) => {
   }
 };
 
-// 2. Lấy danh sách yêu thích theo UserID (Dành cho App/User)
+// 2. Láº¥y danh sÃ¡ch yÃªu thÃ­ch theo UserID (DÃ nh cho App/User)
 exports.getFavorites = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -19,7 +19,7 @@ exports.getFavorites = async (req, res) => {
       include: [
         {
           model: Product,
-          as: 'Product' // Khớp với alias 'Product' ở dòng 70 trong index.js
+          as: 'Product' // Khá»›p vá»›i alias 'Product' á»Ÿ dÃ²ng 70 trong index.js
         }
       ]
     });
@@ -29,7 +29,7 @@ exports.getFavorites = async (req, res) => {
   }
 };
 
-// 3. Thêm hoặc Bỏ yêu thích
+// 3. ThÃªm hoáº·c Bá» yÃªu thÃ­ch
 exports.toggleFavorite = async (req, res) => {
   try {
     const { userId, productId } = req.body;
@@ -39,23 +39,25 @@ exports.toggleFavorite = async (req, res) => {
 
     if (existing) {
       await existing.destroy();
-      return res.json({ isFavorite: false, message: 'Đã xóa khỏi yêu thích' });
+      return res.json({ isFavorite: false, message: 'ÄÃ£ xÃ³a khá»i yÃªu thÃ­ch' });
     } else {
       await Favorite.create({ UserID: userId, ProductID: productId });
-      return res.json({ isFavorite: true, message: 'Đã thêm vào yêu thích' });
+      return res.json({ isFavorite: true, message: 'ÄÃ£ thÃªm vÃ o yÃªu thÃ­ch' });
     }
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// 4. Xóa theo FavoriteID (Dành cho Admin Panel)
+// 4. XÃ³a theo FavoriteID (DÃ nh cho Admin Panel)
 exports.deleteFavorite = async (req, res) => {
   try {
     const { id } = req.params;
     await Favorite.destroy({ where: { FavoriteID: id } });
-    res.json({ message: 'Xóa thành công' });
+    res.json({ message: 'XÃ³a thÃ nh cÃ´ng' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
+

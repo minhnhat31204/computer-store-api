@@ -91,7 +91,7 @@
   <script>
     const API_BASE = 'http://localhost:5000/api';
     
-    // Schema chuẩn xác 100% cột
+    // Schema chuáº©n xÃ¡c 100% cá»™t
     const schemaMap = {
       'categories': { pk: 'CategoryID', fields: ['CategoryName', 'ImageUrl'] },
       'products': { pk: 'ProductID', fields: ['ProductName', 'Description', 'Price', 'DiscountPrice', 'StockQuantity', 'ImageUrl', 'CategoryID', 'CPU', 'RAM', 'Storage', 'Display', 'Series'] },
@@ -114,7 +114,7 @@
       { name: 'promotions', label: 'Promotions', icon: 'fa-rectangle-ad' },
       { name: 'users', label: 'Users', icon: 'fa-users' },
       { name: 'cart', label: 'Cart Items', icon: 'fa-cart-shopping' },
-      { name: 'favorites', label: 'Favorite Products', icon: 'fa-heart' }, // ✅ Đã thêm Sidebar item Sản phẩm yêu thích
+      { name: 'favorites', label: 'Favorite Products', icon: 'fa-heart' }, // âœ… ÄÃ£ thÃªm Sidebar item Sáº£n pháº©m yÃªu thÃ­ch
       { name: 'orders', label: 'Orders', icon: 'fa-receipt' },
       { name: 'order-items', label: 'Order Items', icon: 'fa-list-check' },
       { name: 'reviews', label: 'Reviews', icon: 'fa-star' }
@@ -149,7 +149,7 @@
 
       currentData = [];
 
-      // 1. Render ngay lập tức tiêu đề cột từ schemaMap để giao diện luôn đúng 100%
+      // 1. Render ngay láº­p tá»©c tiÃªu Ä‘á» cá»™t tá»« schemaMap Ä‘á»ƒ giao diá»‡n luÃ´n Ä‘Ãºng 100%
       const defaultColumns = [schema.pk, ...schema.fields];
       thead.innerHTML = `
         <tr>
@@ -167,7 +167,7 @@
 
         countBadge.innerText = `${currentData.length} documents`;
 
-        // 2. Nếu API trả về thành công và có dữ liệu, cập nhật lại cột theo dữ liệu thực tế
+        // 2. Náº¿u API tráº£ vá» thÃ nh cÃ´ng vÃ  cÃ³ dá»¯ liá»‡u, cáº­p nháº­t láº¡i cá»™t theo dá»¯ liá»‡u thá»±c táº¿
         if (Array.isArray(currentData) && currentData.length > 0) {
           const allColumns = Object.keys(currentData[0]).filter(k => typeof currentData[0][k] !== 'object' || currentData[0][k] === null);
           thead.innerHTML = `
@@ -300,3 +300,5 @@
   </script>
 </body>
 </html>
+
+

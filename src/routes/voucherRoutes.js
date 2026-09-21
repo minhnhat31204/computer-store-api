@@ -7,3 +7,5 @@ router.put('/:id', voucherController.updateVoucher);
 router.delete('/:id', voucherController.deleteVoucher);
 
 module.exports = router;
+
+

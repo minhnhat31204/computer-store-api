@@ -2,16 +2,18 @@ const express = require('express');
 const router = express.Router();
 const favoriteController = require('../controllers/favoriteController');
 
-// Lấy tất cả (phục vụ Admin Panel /api/favorites)
+// Láº¥y táº¥t cáº£ (phá»¥c vá»¥ Admin Panel /api/favorites)
 router.get('/', favoriteController.getAllFavorites);
 
-// Lấy theo UserID
+// Láº¥y theo UserID
 router.get('/:userId', favoriteController.getFavorites);
 
-// Thêm / Bỏ yêu thích
+// ThÃªm / Bá» yÃªu thÃ­ch
 router.post('/toggle', favoriteController.toggleFavorite);
 
-// Xóa bản ghi
+// XÃ³a báº£n ghi
 router.delete('/:id', favoriteController.deleteFavorite);
 
 module.exports = router;
+
+

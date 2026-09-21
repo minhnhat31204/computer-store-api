@@ -12,3 +12,5 @@ const Review = sequelize.define('Review', {
 }, { timestamps: false });
 
 module.exports = Review;
+
+

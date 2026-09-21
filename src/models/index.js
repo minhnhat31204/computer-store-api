@@ -53,7 +53,7 @@ Review.belongsTo(Product, { foreignKey: 'ProductID' });
 // User.hasMany(BuildPC, { foreignKey: 'UserID' });
 // BuildPC.belongsTo(User, { foreignKey: 'UserID' });
 
-// 11. BuildPC 1 - N BuildPCItem (Cấu trúc tối ưu mới)
+// 11. BuildPC 1 - N BuildPCItem (Cáº¥u trÃºc tá»‘i Æ°u má»›i)
 // BuildPC.hasMany(BuildPCItem, { foreignKey: 'BuildPCID' });
 // BuildPCItem.belongsTo(BuildPC, { foreignKey: 'BuildPCID' });
 
@@ -64,10 +64,10 @@ Review.belongsTo(Product, { foreignKey: 'ProductID' });
 // User.belongsToMany(Product, { through: Favorite, foreignKey: 'UserID' });
 // Product.belongsToMany(User, { through: Favorite, foreignKey: 'ProductID' });
 
-// Thiết lập quan hệ giữa Favorite và Product
+// Thiáº¿t láº­p quan há»‡ giá»¯a Favorite vÃ  Product
 Favorite.belongsTo(Product, { 
-  foreignKey: 'ProductID', // Tên khóa ngoại trong bảng Favorites
-  as: 'Product'            // Tên alias trả về khi include
+  foreignKey: 'ProductID', // TÃªn khÃ³a ngoáº¡i trong báº£ng Favorites
+  as: 'Product'            // TÃªn alias tráº£ vá» khi include
 });
 
 Product.hasMany(Favorite, { 
@@ -93,3 +93,5 @@ module.exports = {
   // BuildPCItem,
   Favorite,
 };
+
+

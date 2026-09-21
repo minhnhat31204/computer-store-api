@@ -11,3 +11,5 @@ const ProductVariant = sequelize.define('ProductVariant', {
 }, { timestamps: false });
 
 module.exports = ProductVariant;
+
+
