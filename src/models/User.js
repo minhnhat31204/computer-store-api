@@ -3,6 +3,7 @@ const sequelize = require('../config/database');
 
 const User = sequelize.define('User', {
   UserID: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  PasswordHash: { type: DataTypes.STRING, allowNull: true },
   FullName: { type: DataTypes.STRING, allowNull: false },
   Email: { type: DataTypes.STRING, allowNull: false, unique: true },
   Phone: { type: DataTypes.STRING },
