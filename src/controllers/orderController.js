@@ -1,6 +1,6 @@
-const { Order, OrderItem, User, Product } = require('../models');
+const { Order, OrderItem, User, Product, CartItemDB } = require('../models');
 
-// 1. Láº¥y táº¥t cáº£ Ä‘Æ¡n hÃ ng (bao gá»“m OrderItems vÃ  Chi tiáº¿t sáº£n pháº©m)
+// 1. Lấy tất cả đơn hàng (bao gồm OrderItems và Chi tiết sản phẩm)
 exports.getAll = async (req, res) => {
   try {
     const data = await Order.findAll({
@@ -19,7 +19,7 @@ exports.getAll = async (req, res) => {
   }
 };
 
-// 2. Láº¥y Ä‘Æ¡n hÃ ng theo UserID (Náº¿u app gá»i Ä‘Æ°á»ng dáº«n theo UserId)
+// 2. Lấy đơn hàng theo UserID
 exports.getByUserId = async (req, res) => {
   try {
     const data = await Order.findAll({
@@ -29,7 +29,7 @@ exports.getByUserId = async (req, res) => {
           model: OrderItem, 
           include: [
             { 
-              model: Product // Bá» 'attributes' Ä‘á»ƒ Sequelize tá»± SELECT * cÃ¡c cá»™t thá»±c táº¿ Ä‘ang cÃ³
+              model: Product 
             }
           ] 
         }
@@ -38,17 +38,17 @@ exports.getByUserId = async (req, res) => {
     });
     res.status(200).json(data);
   } catch (err) {
-    console.error("Lá»—i getByUserId:", err); // In lá»—i ra terminal cá»§a Node.js Ä‘á»ƒ kiá»ƒm tra
+    console.error("Lỗi getByUserId:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-// 3. Sá»­a hÃ m Create: Táº¡o ÄÆ¡n hÃ ng kÃ¨m theo danh sÃ¡ch OrderItems
+// 3. Tạo Đơn hàng kèm theo danh sách OrderItems và Tự động xóa giỏ hàng
 exports.create = async (req, res) => {
   try {
     const { UserID, TotalAmount, PaymentMethod, Status, Items, RecipientName, RecipientPhone, ShippingAddress, Note } = req.body;
 
-    // Táº¡o báº£n ghi Order trÆ°á»›c
+    // Tạo bản ghi Order trước
     const newOrder = await Order.create({
       UserID,
       TotalAmount,
@@ -60,7 +60,7 @@ exports.create = async (req, res) => {
       Note
     });
 
-    // Náº¿u cÃ³ danh sÃ¡ch items gá»­i lÃªn, duyá»‡t vÃ  lÆ°u vÃ o báº£ng OrderItem
+    // Nếu có danh sách items gửi lên, duyệt và lưu vào bảng OrderItem
     if (Items && Array.isArray(Items) && Items.length > 0) {
       const orderItemsData = Items.map(item => ({
         OrderID: newOrder.OrderID,
@@ -69,16 +69,23 @@ exports.create = async (req, res) => {
         UnitPrice: item.UnitPrice || item.Price || item.price || 0
       }));
 
-      // ThÃªm toÃ n bá»™ cÃ¡c sáº£n pháº©m vÃ o CSDL cÃ¹ng lÃºc
+      // Thêm toàn bộ các sản phẩm vào CSDL cùng lúc
       await OrderItem.bulkCreate(orderItemsData);
     }
 
+    // Tự động xóa toàn bộ sản phẩm trong giỏ hàng (CartItemDB) của User sau khi đặt hàng thành công
+    if (UserID) {
+      await CartItemDB.destroy({
+        where: { UserID: UserID }
+      });
+    }
+
     res.status(201).json({ 
-      message: 'Äáº·t hÃ ng thÃ nh cÃ´ng', 
+      message: 'Đặt hàng thành công', 
       order: newOrder 
     });
   } catch (err) {
-    console.error("Lá»—i táº¡o Ä‘Æ¡n hÃ ng:", err);
+    console.error("Lỗi tạo đơn hàng:", err);
     res.status(400).json({ error: err.message });
   }
 };
@@ -100,5 +107,3 @@ exports.delete = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-
