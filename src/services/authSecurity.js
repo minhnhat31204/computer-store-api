@@ -111,11 +111,15 @@ function firebaseAuth() {
 
 async function verifyFirebasePhoneToken(idToken, expectedPhone, options = {}) {
   if (!idToken) throw Object.assign(new Error('Thiếu xác nhận số điện thoại Firebase.'), { status: 400 });
+  const token = String(idToken);
+  if (token.split('.').length !== 3) {
+    throw Object.assign(new Error('Firebase ID token nhận được không đúng định dạng. Hãy tải lại trang và xác minh OTP lại.'), { status: 400 });
+  }
   let decoded;
-  try { decoded = await firebaseAuth().verifyIdToken(String(idToken)); }
+  try { decoded = await firebaseAuth().verifyIdToken(token); }
   catch (error) {
     if (error.status) throw error;
-    console.error('Firebase ID token verification failed:', error.code || error.message);
+    console.error('Firebase ID token verification failed:', error.stack || error.code || error.message);
     throw Object.assign(new Error('Xác nhận Firebase không hợp lệ hoặc đã hết hạn.'), { status: 401 });
   }
   if (options.maxAuthAgeSeconds && Date.now() / 1000 - Number(decoded.auth_time || 0) > options.maxAuthAgeSeconds) {
