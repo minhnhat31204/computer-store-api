@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 const { User } = require('../models');
 const {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
-  getVerifiedChallenge, consumeChallenge, sendSms, sendEmail, sendChallenge,
+  getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
   hashPassword, verifyPassword,
 } = require('../services/authSecurity');
 
@@ -34,33 +34,13 @@ function safeUser(user) {
   return value;
 }
 
-// Send registration OTP to a phone before creating the account.
-exports.sendRegisterOtp = async (req, res) => {
-  try {
-    const phone = normalizePhone(req.body.phone);
-    const existing = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(phone) } } });
-    if (existing) return res.status(409).json({ error: 'Số điện thoại đã được đăng ký.' });
-    await sendChallenge(`register:${phone}`, (code) => sendSms(phone, code));
-    return res.json({ message: 'Đã gửi mã xác thực đến số điện thoại.' });
-  } catch (error) {
-    return sendError(res, error, 'Không gửi được mã SMS.');
-  }
-};
-
 exports.register = async (req, res) => {
   try {
-    const phone = req.body.phone ? normalizePhone(req.body.phone) : '';
-    const otp = String(req.body.otp || '').trim();
+    const phone = await verifyFirebasePhoneToken(req.body.firebaseIdToken, req.body.phone, { maxAuthAgeSeconds: 600 });
     const password = String(req.body.password || '');
     if (password.length < 8) return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
     const email = req.body.email ? emailAddress(req.body.email) : '';
-    if (otp) {
-      if (!phone || !checkChallenge(`register:${phone}`, otp)) return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn.' });
-    } else if (!email) {
-      return res.status(400).json({ error: 'Hãy xác minh số điện thoại bằng OTP trước khi đăng ký.' });
-    }
-    const where = phone ? { Phone: { [Op.in]: phoneLookupValues(phone) } } : null;
-    const existing = where ? await User.findOne({ where }) : null;
+    const existing = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(phone) } } });
     if (existing) return res.status(409).json({ error: 'Số điện thoại đã được đăng ký.' });
 
     const passwordHash = await hashPassword(password);
@@ -73,7 +53,6 @@ exports.register = async (req, res) => {
       RecoveryEmailVerified: false,
       Role: 'Customer',
     });
-    if (otp) consumeChallenge(`register:${phone}`);
     return res.status(201).json({ message: 'Đăng ký thành công.', user: safeUser(user) });
   } catch (error) {
     return sendError(res, error, 'Đăng ký thất bại.');
@@ -104,6 +83,17 @@ exports.login = async (req, res) => {
   }
 };
 
+exports.firebasePhoneLogin = async (req, res) => {
+  try {
+    const phone = await verifyFirebasePhoneToken(req.body.firebaseIdToken, req.body.phone);
+    const user = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(phone) } } });
+    if (!user) return res.status(404).json({ error: 'Chưa có tài khoản với số điện thoại này.' });
+    return res.json({ message: 'Đăng nhập thành công.', user: safeUser(user) });
+  } catch (error) {
+    return sendError(res, error, 'Không xác thực được số điện thoại.');
+  }
+};
+
 exports.sendPasswordResetOtp = async (req, res) => {
   try {
     const channel = String(req.body.channel || '');
@@ -119,8 +109,7 @@ exports.sendPasswordResetOtp = async (req, res) => {
     // Keep the response generic so this endpoint does not reveal whether an account exists.
     if (user) {
       const key = resetKey(channel, contact);
-      if (channel === 'phone') await sendChallenge(key, (code) => sendSms(contact, code));
-      else await sendChallenge(key, (code) => sendEmail(contact, code, 'Mã OTP đặt lại mật khẩu MANB SHOP'));
+      if (channel === 'email') await sendChallenge(key, (code) => sendEmail(contact, code, 'Mã OTP đặt lại mật khẩu MANB SHOP'));
     }
     return res.json({ message: 'Nếu thông tin khớp tài khoản, mã OTP sẽ được gửi đến bạn.' });
   } catch (error) {
@@ -132,6 +121,12 @@ exports.verifyPasswordResetOtp = async (req, res) => {
   try {
     const channel = String(req.body.channel || '');
     const contact = resetContact(channel, req.body);
+    if (channel === 'phone') {
+      await verifyFirebasePhoneToken(req.body.firebaseIdToken, contact, { maxAuthAgeSeconds: 600 });
+      const user = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(contact) } } });
+      if (!user) return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc số điện thoại chưa đăng ký.' });
+      return res.json({ message: 'Xác thực OTP thành công.' });
+    }
     const record = checkChallenge(resetKey(channel, contact), req.body.otp);
     if (!record) return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn.' });
     return res.json({ message: 'Xác thực OTP thành công.' });
@@ -145,10 +140,11 @@ exports.resetPassword = async (req, res) => {
     const channel = String(req.body.channel || '');
     const contact = resetContact(channel, req.body);
     const key = resetKey(channel, contact);
-    const record = getVerifiedChallenge(key);
+    const record = channel === 'email' ? getVerifiedChallenge(key) : null;
     const password = String(req.body.newPassword || '');
-    if (!record) return res.status(400).json({ error: 'Hãy xác thực OTP trước khi đổi mật khẩu.' });
+    if (channel === 'email' && !record) return res.status(400).json({ error: 'Hãy xác thực OTP trước khi đổi mật khẩu.' });
     if (password.length < 8) return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+    if (channel === 'phone') await verifyFirebasePhoneToken(req.body.firebaseIdToken, contact, { maxAuthAgeSeconds: 600 });
     const user = channel === 'phone'
       ? await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(contact) } } })
       : await User.findOne({ where: { [Op.or]: [

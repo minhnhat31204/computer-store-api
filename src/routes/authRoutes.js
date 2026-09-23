@@ -2,9 +2,9 @@ const router = require('express').Router();
 const authController = require('../controllers/authController');
 
 // Khai báo đường dẫn đăng ký và đăng nhập
-router.post('/register/send-otp', authController.sendRegisterOtp);
 router.post('/register', authController.register);
 router.post('/login', authController.login);
+router.post('/firebase-phone-login', authController.firebasePhoneLogin);
 
 // Các đường dẫn xử lý quên mật khẩu qua OTP
 router.post('/forgot-password', authController.forgotPassword);

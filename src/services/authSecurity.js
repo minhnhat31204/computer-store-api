@@ -1,8 +1,10 @@
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env.sms'), override: true });
 const { promisify } = require('util');
 const { getTransporter } = require('../config/mail');
+const admin = require('firebase-admin');
 
 const scrypt = promisify(crypto.scrypt);
 const challenges = new Map();
@@ -74,37 +76,56 @@ function consumeChallenge(key) {
   challenges.delete(key);
 }
 
-async function sendSms(to, code) {
-  const { SPEEDSMS_ACCESS_TOKEN, SPEEDSMS_TYPE = '4', SPEEDSMS_SENDER = 'Verify' } = process.env;
-  if (!SPEEDSMS_ACCESS_TOKEN) {
-    const error = new Error('SMS chưa được cấu hình. Hãy thêm SPEEDSMS_ACCESS_TOKEN vào .env.sms.');
-    error.status = 503;
-    throw error;
-  }
-
-  const params = new URLSearchParams({
-    'access-token': SPEEDSMS_ACCESS_TOKEN,
-    to: normalizePhone(to).slice(1),
-    content: `[MANB SHOP] Ma xac thuc cua ban la ${code}. Ma co hieu luc trong 5 phut.`,
-    type: SPEEDSMS_TYPE,
-  });
-  if (SPEEDSMS_SENDER) params.set('sender', SPEEDSMS_SENDER);
-
-  let result;
-  try {
-    const response = await fetch(`https://api.speedsms.vn/index.php/sms/send?${params.toString()}`);
-    result = await response.json();
-    if (!response.ok || result?.status !== 'success' || String(result?.code) !== '00') {
-      const error = new Error('SpeedSMS không gửi được mã xác thực. Kiểm tra API token, Brandname và số dư tài khoản.');
-      error.status = 502;
-      throw error;
+function firebaseAuth() {
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  if (!projectId) throw Object.assign(new Error('Backend chưa cấu hình FIREBASE_PROJECT_ID.'), { status: 503 });
+  if (!admin.apps.length) {
+    const options = { projectId };
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      let serviceAccount;
+      try { serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON); }
+      catch { throw Object.assign(new Error('FIREBASE_SERVICE_ACCOUNT_JSON không phải JSON hợp lệ.'), { status: 503 }); }
+      options.credential = admin.credential.cert(serviceAccount);
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      const configuredPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      const credentialPath = path.isAbsolute(configuredPath)
+        ? configuredPath
+        : path.resolve(__dirname, '../../', configuredPath);
+      if (!fs.existsSync(credentialPath)) {
+        throw Object.assign(new Error(`Không tìm thấy Firebase service account: ${credentialPath}`), { status: 503 });
+      }
+      let serviceAccount;
+      try { serviceAccount = JSON.parse(fs.readFileSync(credentialPath, 'utf8')); }
+      catch { throw Object.assign(new Error('Firebase service account không phải JSON hợp lệ.'), { status: 503 }); }
+      if (serviceAccount.project_id && serviceAccount.project_id !== projectId) {
+        throw Object.assign(new Error('Firebase service account thuộc project khác với FIREBASE_PROJECT_ID.'), { status: 503 });
+      }
+      options.credential = admin.credential.cert(serviceAccount);
+    } else {
+      options.credential = admin.credential.applicationDefault();
     }
-  } catch (cause) {
-    if (cause.status) throw cause;
-    const error = new Error('Không kết nối được SpeedSMS để gửi mã xác thực.');
-    error.status = 502;
-    throw error;
+    admin.initializeApp(options);
   }
+  return admin.auth();
+}
+
+async function verifyFirebasePhoneToken(idToken, expectedPhone, options = {}) {
+  if (!idToken) throw Object.assign(new Error('Thiếu xác nhận số điện thoại Firebase.'), { status: 400 });
+  let decoded;
+  try { decoded = await firebaseAuth().verifyIdToken(String(idToken)); }
+  catch (error) {
+    if (error.status) throw error;
+    console.error('Firebase ID token verification failed:', error.code || error.message);
+    throw Object.assign(new Error('Xác nhận Firebase không hợp lệ hoặc đã hết hạn.'), { status: 401 });
+  }
+  if (options.maxAuthAgeSeconds && Date.now() / 1000 - Number(decoded.auth_time || 0) > options.maxAuthAgeSeconds) {
+    throw Object.assign(new Error('Phiên xác thực số điện thoại đã cũ. Vui lòng xác thực lại bằng OTP.'), { status: 401 });
+  }
+  const phone = normalizePhone(decoded.phone_number || '');
+  if (expectedPhone && phone !== normalizePhone(expectedPhone)) {
+    throw Object.assign(new Error('Số điện thoại Firebase không khớp.'), { status: 403 });
+  }
+  return phone;
 }
 async function sendEmail(to, code, subject) {
   const transporter = getTransporter();
@@ -153,7 +174,7 @@ async function verifyPassword(password, stored) {
 
 module.exports = {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
-  getVerifiedChallenge, consumeChallenge, sendSms, sendEmail, sendChallenge,
+  getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
   hashPassword, verifyPassword,
 };
 

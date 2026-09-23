@@ -2,3 +2,4 @@ node_modules/
 .env.payos
 .npm-cache/
 .env.sms
+firebase-service-account*.json
