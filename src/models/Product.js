@@ -8,7 +8,7 @@ const Product = sequelize.define('Product', {
   Price: { type: DataTypes.DECIMAL(18, 2), allowNull: false },
   DiscountPrice: { type: DataTypes.DECIMAL(18, 2) },
   StockQuantity: { type: DataTypes.INTEGER, defaultValue: 0 },
-  ImageUrl: { type: DataTypes.STRING },
+  ImageUrl: { type: DataTypes.TEXT },
   CreatedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   CategoryID: { type: DataTypes.INTEGER }, // FK
   CPU: { type: DataTypes.STRING },
@@ -21,5 +21,3 @@ const Product = sequelize.define('Product', {
 }, { timestamps: false });
 
 module.exports = Product;
-
-
