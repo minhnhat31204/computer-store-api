@@ -12,6 +12,7 @@ const Review = require('./Review');
 // const BuildPC = require('./BuildPC');
 // const BuildPCItem = require('./BuildPCItem');
 const Favorite = require('./Favorite');
+const PaymentTransaction = require('./PaymentTransaction');
 
 // 1. Category 1 - N Product
 Category.hasMany(Product, { foreignKey: 'CategoryID' });
@@ -24,6 +25,8 @@ ProductVariant.belongsTo(Product, { foreignKey: 'ProductID' });
 // 3. User 1 - N Order
 User.hasMany(Order, { foreignKey: 'UserID' });
 Order.belongsTo(User, { foreignKey: 'UserID' });
+Order.hasMany(PaymentTransaction, { foreignKey: 'OrderID', as: 'Payments' });
+PaymentTransaction.belongsTo(Order, { foreignKey: 'OrderID', as: 'Order' });
 
 // 4. Order 1 - N OrderItem
 Order.hasMany(OrderItem, { foreignKey: 'OrderID' });
@@ -92,6 +95,6 @@ module.exports = {
   // BuildPC,
   // BuildPCItem,
   Favorite,
+  PaymentTransaction,
 };
-
 
