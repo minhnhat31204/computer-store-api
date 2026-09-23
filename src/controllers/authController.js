@@ -1,200 +1,247 @@
+const { Op } = require('sequelize');
 const { User } = require('../models');
-const nodemailer = require('nodemailer');
+const {
+  normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
+  getVerifiedChallenge, consumeChallenge, sendSms, sendEmail, sendChallenge,
+  hashPassword, verifyPassword,
+} = require('../services/authSecurity');
 
-// Lưu trữ OTP tạm thời trong bộ nhớ
-const otpStore = {}; 
+function sendError(res, error, fallback) {
+  const status = Number(error.status) || 500;
+  if (status >= 500) console.error(fallback, error.message);
+  return res.status(status).json({ error: status >= 500 && status !== 503 ? fallback : error.message });
+}
 
-// Đăng ký
+function emailAddress(value) {
+  const email = String(value || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw Object.assign(new Error('Email không hợp lệ.'), { status: 400 });
+  return email;
+}
+
+function resetKey(channel, value) {
+  return `reset:${channel}:${value}`;
+}
+
+function resetContact(channel, body) {
+  if (channel === 'phone') return normalizePhone(body.phone);
+  if (channel === 'email') return emailAddress(body.email);
+  throw Object.assign(new Error('Phương thức nhận OTP không hợp lệ.'), { status: 400 });
+}
+
+function safeUser(user) {
+  const value = user.toJSON();
+  delete value.PasswordHash;
+  return value;
+}
+
+// Send registration OTP to a phone before creating the account.
+exports.sendRegisterOtp = async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body.phone);
+    const existing = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(phone) } } });
+    if (existing) return res.status(409).json({ error: 'Số điện thoại đã được đăng ký.' });
+    await sendChallenge(`register:${phone}`, (code) => sendSms(phone, code));
+    return res.json({ message: 'Đã gửi mã xác thực đến số điện thoại.' });
+  } catch (error) {
+    return sendError(res, error, 'Không gửi được mã SMS.');
+  }
+};
+
 exports.register = async (req, res) => {
   try {
-    const { fullName, email, password, phone } = req.body;
-    const newUser = await User.create({ 
-      FullName: fullName, 
-      Email: email, 
-      PasswordHash: password, 
-      Phone: phone 
+    const phone = req.body.phone ? normalizePhone(req.body.phone) : '';
+    const otp = String(req.body.otp || '').trim();
+    const password = String(req.body.password || '');
+    if (password.length < 8) return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+    const email = req.body.email ? emailAddress(req.body.email) : '';
+    if (otp) {
+      if (!phone || !checkChallenge(`register:${phone}`, otp)) return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn.' });
+    } else if (!email) {
+      return res.status(400).json({ error: 'Hãy xác minh số điện thoại bằng OTP trước khi đăng ký.' });
+    }
+    const where = phone ? { Phone: { [Op.in]: phoneLookupValues(phone) } } : null;
+    const existing = where ? await User.findOne({ where }) : null;
+    if (existing) return res.status(409).json({ error: 'Số điện thoại đã được đăng ký.' });
+
+    const passwordHash = await hashPassword(password);
+    const emailAddressToSave = email || `phone-${phone.replace(/\D/g, '')}@phone.manb.local`;
+    const user = await User.create({
+      FullName: String(req.body.fullName || '').trim() || (phone ? `Khách hàng ${phone.slice(-4)}` : 'Khách hàng'),
+      Email: emailAddressToSave,
+      Phone: phone || null,
+      PasswordHash: passwordHash,
+      RecoveryEmailVerified: false,
+      Role: 'Customer',
     });
-    res.status(201).json({ message: 'Đăng ký thành công', user: newUser });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+    if (otp) consumeChallenge(`register:${phone}`);
+    return res.status(201).json({ message: 'Đăng ký thành công.', user: safeUser(user) });
+  } catch (error) {
+    return sendError(res, error, 'Đăng ký thất bại.');
   }
 };
 
-// Đăng nhập
+// Phone is the primary login identifier; email remains supported for older app accounts.
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ where: { Email: email, PasswordHash: password } });
-    if (!user) return res.status(401).json({ error: 'Email hoặc mật khẩu không đúng' });
-    res.status(200).json({ message: 'Đăng nhập thành công', user });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const identifier = String(req.body.phone || req.body.email || '').trim();
+    const password = String(req.body.password || '');
+    if (!identifier || !password) return res.status(400).json({ error: 'Vui lòng nhập số điện thoại và mật khẩu.' });
+    const isEmail = identifier.includes('@');
+    const conditions = isEmail
+      ? [{ Email: identifier.toLowerCase() }]
+      : [{ Phone: { [Op.in]: phoneLookupValues(identifier) } }];
+    const user = await User.findOne({ where: { [Op.or]: conditions } });
+    if (!user) return res.status(401).json({ error: 'Số điện thoại hoặc mật khẩu không đúng.' });
+    const result = await verifyPassword(password, user.PasswordHash);
+    if (!result.valid) return res.status(401).json({ error: 'Số điện thoại hoặc mật khẩu không đúng.' });
+    if (result.needsUpgrade) {
+      user.PasswordHash = await hashPassword(password);
+      await user.save();
+    }
+    return res.json({ message: 'Đăng nhập thành công.', user: safeUser(user) });
+  } catch (error) {
+    return sendError(res, error, 'Đăng nhập thất bại.');
   }
 };
 
-// Gửi mã OTP Quên Mật Khẩu
-exports.forgotPassword = async (req, res) => {
+exports.sendPasswordResetOtp = async (req, res) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
-    if (!email) return res.status(400).json({ error: 'Email là bắt buộc' });
+    const channel = String(req.body.channel || '');
+    if (!['phone', 'email'].includes(channel)) return res.status(400).json({ error: 'Phương thức nhận OTP không hợp lệ.' });
+    const contact = resetContact(channel, req.body);
+    const user = channel === 'phone'
+      ? await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(contact) } } })
+      : await User.findOne({ where: { [Op.or]: [
+          { RecoveryEmail: contact, RecoveryEmailVerified: true },
+          { Email: contact },
+        ] } });
 
-    const user = await User.findOne({ where: { Email: email } });
-    if (!user) return res.status(404).json({ error: 'Email không tồn tại trong hệ thống' });
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otpStore[email] = { otp, expires: Date.now() + 5 * 60 * 1000 }; // Mã hết hạn sau 5 phút
-
-    // Lấy transporter từ file config/mail hoặc tạo mới bằng Nodemailer
-    let transporter;
-    try {
-      const { getTransporter } = require('../config/mail');
-      transporter = getTransporter();
-    } catch {
-      transporter = null;
+    // Keep the response generic so this endpoint does not reveal whether an account exists.
+    if (user) {
+      const key = resetKey(channel, contact);
+      if (channel === 'phone') await sendChallenge(key, (code) => sendSms(contact, code));
+      else await sendChallenge(key, (code) => sendEmail(contact, code, 'Mã OTP đặt lại mật khẩu MANB SHOP'));
     }
-
-    if (!transporter) {
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.SMTP_USER || 'YOUR_EMAIL@gmail.com', // Thay bằng email của bạn hoặc cấu hình trong .env
-          pass: process.env.SMTP_PASS || 'YOUR_APP_PASSWORD'     // Mật khẩu ứng dụng Gmail (App Password)
-        }
-      });
-    }
-
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || '"MANB SHOP" <noreply@manb.vn>',
-      to: email,
-      subject: 'Mã xác thực OTP - Đặt lại mật khẩu MANB SHOP',
-      text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp}. Mã có hiệu lực trong 5 phút.`
-    });
-
-    res.status(200).json({ message: 'Mã OTP đã được gửi đến email của bạn' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.json({ message: 'Nếu thông tin khớp tài khoản, mã OTP sẽ được gửi đến bạn.' });
+  } catch (error) {
+    return sendError(res, error, 'Không gửi được mã OTP.');
   }
 };
 
-// Xác thực mã OTP (Bước trung gian trước khi đổi mật khẩu mới)
-exports.verifyOtp = async (req, res) => {
+exports.verifyPasswordResetOtp = async (req, res) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
-    const otp = String(req.body.otp || '').trim();
-    const record = otpStore[email];
-
-    if (!record || record.otp !== otp || Date.now() > record.expires) {
-      return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn' });
-    }
-
-    res.status(200).json({ message: 'Xác thực OTP thành công' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const channel = String(req.body.channel || '');
+    const contact = resetContact(channel, req.body);
+    const record = checkChallenge(resetKey(channel, contact), req.body.otp);
+    if (!record) return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn.' });
+    return res.json({ message: 'Xác thực OTP thành công.' });
+  } catch (error) {
+    return sendError(res, error, 'Không xác thực được mã OTP.');
   }
 };
 
-// Đặt lại mật khẩu mới bằng OTP
 exports.resetPassword = async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body;
-    const cleanEmail = String(email || '').trim().toLowerCase();
-    const record = otpStore[cleanEmail];
-
-    if (!record || record.otp !== otp || Date.now() > record.expires) {
-      return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn' });
-    }
-
-    await User.update({ PasswordHash: newPassword }, { where: { Email: cleanEmail } });
-    delete otpStore[cleanEmail];
-    res.status(200).json({ message: 'Đặt lại mật khẩu thành công' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const channel = String(req.body.channel || '');
+    const contact = resetContact(channel, req.body);
+    const key = resetKey(channel, contact);
+    const record = getVerifiedChallenge(key);
+    const password = String(req.body.newPassword || '');
+    if (!record) return res.status(400).json({ error: 'Hãy xác thực OTP trước khi đổi mật khẩu.' });
+    if (password.length < 8) return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+    const user = channel === 'phone'
+      ? await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(contact) } } })
+      : await User.findOne({ where: { [Op.or]: [
+          { RecoveryEmail: contact, RecoveryEmailVerified: true },
+          { Email: contact },
+        ] } });
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    user.PasswordHash = await hashPassword(password);
+    await user.save();
+    consumeChallenge(key);
+    return res.json({ message: 'Đặt lại mật khẩu thành công.' });
+  } catch (error) {
+    return sendError(res, error, 'Không đặt lại được mật khẩu.');
   }
 };
 
-// Giữ lại hàm tương thích ngược
-exports.resetPasswordOTP = exports.resetPassword;
+exports.sendEmailVerificationOtp = async (req, res) => {
+  try {
+    const userId = Number(req.body.userId);
+    const email = emailAddress(req.body.email);
+    const currentPassword = String(req.body.currentPassword || '');
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    const passwordCheck = await verifyPassword(currentPassword, user.PasswordHash);
+    if (!currentPassword || !passwordCheck.valid) return res.status(401).json({ error: 'Nhập đúng mật khẩu hiện tại để xác minh email mới.' });
+    const existing = await User.findOne({ where: { RecoveryEmail: email } });
+    if (existing && existing.UserID !== user.UserID) return res.status(409).json({ error: 'Email đã được dùng bởi tài khoản khác.' });
+    const key = `email:${userId}:${email}`;
+    await sendChallenge(key, (code) => sendEmail(email, code, 'Mã OTP xác minh email MANB SHOP'));
+    return res.json({ message: 'Đã gửi mã xác minh đến email.' });
+  } catch (error) {
+    return sendError(res, error, 'Không gửi được mã email.');
+  }
+};
 
-// Đăng nhập / Đăng ký bằng Google
+exports.verifyEmailOtp = async (req, res) => {
+  try {
+    const userId = Number(req.body.userId);
+    const email = emailAddress(req.body.email);
+    const key = `email:${userId}:${email}`;
+    if (!checkChallenge(key, req.body.otp)) return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn.' });
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    const existing = await User.findOne({ where: { RecoveryEmail: email } });
+    if (existing && existing.UserID !== user.UserID) return res.status(409).json({ error: 'Email đã được dùng bởi tài khoản khác.' });
+    user.RecoveryEmail = email;
+    user.RecoveryEmailVerified = true;
+    await user.save();
+    consumeChallenge(key);
+    return res.json({ message: 'Email đã được xác minh.', user: safeUser(user) });
+  } catch (error) {
+    return sendError(res, error, 'Không xác minh được email.');
+  }
+};
+
+// Backwards-compatible endpoints used by older web/app clients.
+exports.forgotPassword = (req, res) => { req.body.channel = 'email'; return exports.sendPasswordResetOtp(req, res); };
+exports.verifyOtp = (req, res) => { req.body.channel = 'email'; return exports.verifyPasswordResetOtp(req, res); };
+exports.resetPasswordLegacy = (req, res) => { req.body.channel = 'email'; return exports.resetPassword(req, res); };
+exports.resetPasswordOTP = exports.resetPasswordLegacy;
+
 exports.googleLogin = async (req, res) => {
   try {
     const { fullName, email, avatar } = req.body;
     let user = await User.findOne({ where: { Email: email } });
-
-    if (!user) {
-      user = await User.create({
-        FullName: fullName,
-        Email: email,
-        Avatar: avatar,
-        Role: 'Customer'
-      });
-    }
-
-    res.status(200).json({ message: 'Thành công', user });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (!user) user = await User.create({ FullName: fullName, Email: email, Avatar: avatar, Role: 'Customer' });
+    return res.json({ message: 'Thành công', user: safeUser(user) });
+  } catch (error) {
+    return sendError(res, error, 'Đăng nhập Google thất bại.');
   }
 };
 
-// OTP đăng nhập
 exports.sendLoginOtp = async (req, res) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
-    if (!email) return res.status(400).json({ error: 'Email là bắt buộc' });
-    
+    const email = emailAddress(req.body.email);
     const user = await User.findOne({ where: { Email: email } });
-    if (!user) return res.status(404).json({ error: 'Email không tồn tại trong hệ thống' });
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otpStore[`login:${email}`] = { otp, expires: Date.now() + 5 * 60 * 1000 };
-
-    let transporter;
-    try {
-      const { getTransporter } = require('../config/mail');
-      transporter = getTransporter();
-    } catch {
-      transporter = null;
-    }
-
-    if (!transporter) {
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.SMTP_USER || 'YOUR_EMAIL@gmail.com',
-          pass: process.env.SMTP_PASS || 'YOUR_APP_PASSWORD'
-        }
-      });
-    }
-
-    await transporter.sendMail({ 
-      from: process.env.SMTP_FROM || process.env.SMTP_USER || '"MANB SHOP" <noreply@manb.vn>', 
-      to: email, 
-      subject: 'Mã OTP đăng nhập', 
-      text: `Mã OTP của bạn là ${otp}. Mã có hiệu lực trong 5 phút.` 
-    });
-
-    return res.json({ message: 'Đã gửi OTP' });
-  } catch (error) { 
-    return res.status(500).json({ error: error.message }); 
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    await sendChallenge(`login:${email}`, (code) => sendEmail(email, code, 'Mã OTP đăng nhập MANB SHOP'));
+    return res.json({ message: 'Đã gửi OTP.' });
+  } catch (error) {
+    return sendError(res, error, 'Không gửi được OTP.');
   }
 };
 
 exports.verifyLoginOtp = async (req, res) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
-    const otp = String(req.body.otp || '').trim();
-    const record = otpStore[`login:${email}`];
-
-    if (!record || record.otp !== otp || Date.now() > record.expires) {
-      return res.status(400).json({ error: 'OTP không hợp lệ hoặc đã hết hạn' });
-    }
-
+    const email = emailAddress(req.body.email);
+    if (!checkChallenge(`login:${email}`, req.body.otp)) return res.status(400).json({ error: 'OTP không hợp lệ hoặc đã hết hạn.' });
     const user = await User.findOne({ where: { Email: email }, attributes: { exclude: ['PasswordHash'] } });
-    if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng' });
-
-    delete otpStore[`login:${email}`];
-    return res.json({ message: 'Đăng nhập thành công', user });
-  } catch (error) { 
-    return res.status(500).json({ error: error.message }); 
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
+    consumeChallenge(`login:${email}`);
+    return res.json({ message: 'Đăng nhập thành công.', user });
+  } catch (error) {
+    return sendError(res, error, 'Đăng nhập OTP thất bại.');
   }
 };
