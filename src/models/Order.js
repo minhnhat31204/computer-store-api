@@ -12,9 +12,9 @@ const Order = sequelize.define('Order', {
   ShippingAddress: { type: DataTypes.STRING },
   Note: { type: DataTypes.TEXT },
   PaymentMethod: { type: DataTypes.STRING },
-  DiscountAmount: { type: DataTypes.DECIMAL(18, 2) }
+  DiscountAmount: { type: DataTypes.DECIMAL(18, 2) },
+  VoucherCode: { type: DataTypes.STRING },
+  VoucherID: { type: DataTypes.INTEGER }
 }, { timestamps: false });
 
 module.exports = Order;
-
-

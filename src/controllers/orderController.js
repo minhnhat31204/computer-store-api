@@ -1,4 +1,4 @@
-const { Order, OrderItem, User, Product, CartItemDB, PaymentTransaction } = require('../models');
+const { Order, OrderItem, User, Product, CartItemDB, PaymentTransaction, Voucher } = require('../models');
 const { getPayOS } = require('../services/payos');
 
 // 1. Lấy tất cả đơn hàng (bao gồm OrderItems và Chi tiết sản phẩm)
@@ -48,7 +48,27 @@ exports.getByUserId = async (req, res) => {
 // 3. Tạo Đơn hàng kèm theo danh sách OrderItems và Tự động xóa giỏ hàng
 exports.create = async (req, res) => {
   try {
-    const { UserID, TotalAmount, PaymentMethod, Status, Items, RecipientName, RecipientPhone, ShippingAddress, Note } = req.body;
+    const { UserID, TotalAmount, PaymentMethod, Status, Items, RecipientName, RecipientPhone, ShippingAddress, Note, VoucherID } = req.body;
+
+    let discountAmount = 0;
+    let voucherCode = null;
+    if (VoucherID) {
+      const voucher = await Voucher.findByPk(Number(VoucherID));
+      const expiresAt = voucher?.ExpiryDate ? new Date(voucher.ExpiryDate) : null;
+      if (expiresAt) expiresAt.setHours(23, 59, 59, 999);
+      if (!voucher || !voucher.IsActive || (expiresAt && expiresAt < new Date())) {
+        return res.status(400).json({ error: 'Voucher không tồn tại, đã hết hạn hoặc đã ngừng áp dụng.' });
+      }
+      const subtotal = (Array.isArray(Items) ? Items : []).reduce((sum, item) => {
+        const unitPrice = Number(item.UnitPrice ?? item.Price ?? item.price ?? 0);
+        const quantity = Number(item.Quantity ?? item.quantity ?? 1);
+        return sum + Math.max(0, unitPrice) * Math.max(0, quantity);
+      }, 0);
+      const percentageDiscount = subtotal * Math.max(0, Number(voucher.DiscountPercentage) || 0) / 100;
+      const cap = Number(voucher.MaxDiscountAmount);
+      discountAmount = Math.min(subtotal, percentageDiscount, Number.isFinite(cap) && cap > 0 ? cap : percentageDiscount);
+      voucherCode = voucher.Code;
+    }
 
     // Tạo bản ghi Order trước
     const newOrder = await Order.create({
@@ -59,7 +79,10 @@ exports.create = async (req, res) => {
       RecipientName,
       RecipientPhone,
       ShippingAddress,
-      Note
+      Note,
+      DiscountAmount: discountAmount,
+      VoucherCode: voucherCode ? String(voucherCode).trim().slice(0, 50) : null,
+      VoucherID: VoucherID ? Number(VoucherID) : null
     });
 
     // Nếu có danh sách items gửi lên, duyệt và lưu vào bảng OrderItem
