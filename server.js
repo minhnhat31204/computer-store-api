@@ -52,6 +52,7 @@ app.use('/api/order-items', require('./src/routes/orderItemRoutes'));
 app.use('/api/reviews', require('./src/routes/reviewRoutes'));
 app.use('/api/auth', require('./src/routes/authRoutes'));
 app.use('/api/favorites', require('./src/routes/favoriteRoutes'));
+app.use('/api/addresses', require('./src/routes/addressRoutes'));
 
 app.use((err, _req, res, _next) => { 
   console.error(err); 
