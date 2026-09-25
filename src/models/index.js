@@ -14,6 +14,7 @@ const Review = require('./Review');
 const Favorite = require('./Favorite');
 const PaymentTransaction = require('./PaymentTransaction');
 const AddressBookEntry = require('./AddressBookEntry');
+const Notification = require('./Notification');
 
 // 1. Category 1 - N Product
 Category.hasMany(Product, { foreignKey: 'CategoryID' });
@@ -28,6 +29,10 @@ User.hasMany(Order, { foreignKey: 'UserID' });
 Order.belongsTo(User, { foreignKey: 'UserID' });
 User.hasMany(AddressBookEntry, { foreignKey: 'UserID' });
 AddressBookEntry.belongsTo(User, { foreignKey: 'UserID' });
+User.hasMany(Notification, { foreignKey: 'UserID' });
+Notification.belongsTo(User, { foreignKey: 'UserID' });
+Order.hasMany(Notification, { foreignKey: 'OrderID' });
+Notification.belongsTo(Order, { foreignKey: 'OrderID' });
 Order.hasMany(PaymentTransaction, { foreignKey: 'OrderID', as: 'Payments' });
 PaymentTransaction.belongsTo(Order, { foreignKey: 'OrderID', as: 'Order' });
 
@@ -100,4 +105,5 @@ module.exports = {
   Favorite,
   PaymentTransaction,
   AddressBookEntry,
+  Notification,
 };

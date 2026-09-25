@@ -48,6 +48,7 @@ app.use('/api/promotions', require('./src/routes/promotionRoutes'));
 app.use('/api/users', require('./src/routes/userRoutes'));
 app.use('/api/cart', require('./src/routes/cartRoutes'));
 app.use('/api/orders', require('./src/routes/orderRoutes'));
+app.use('/api/notifications', require('./src/routes/notificationRoutes'));
 app.use('/api/order-items', require('./src/routes/orderItemRoutes'));
 app.use('/api/reviews', require('./src/routes/reviewRoutes'));
 app.use('/api/auth', require('./src/routes/authRoutes'));

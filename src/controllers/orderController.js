@@ -1,5 +1,11 @@
 const { Order, OrderItem, User, Product, CartItemDB, PaymentTransaction, Voucher } = require('../models');
 const { getPayOS } = require('../services/payos');
+const { notifyOrderCreated, notifyOrderStatus, notifyOrderPaid } = require('../services/orderNotifications');
+
+// Local development machines cannot receive PayOS webhooks without a public URL.
+// Throttle provider status checks because the order detail page polls every few seconds.
+const payOSStatusSyncChecks = new Map();
+const PAYOS_STATUS_SYNC_INTERVAL_MS = 10000;
 
 // 1. Lấy tất cả đơn hàng (bao gồm OrderItems và Chi tiết sản phẩm)
 exports.getAll = async (req, res) => {
@@ -105,6 +111,8 @@ exports.create = async (req, res) => {
       });
     }
 
+    await notifyOrderCreated(newOrder);
+
     res.status(201).json({ 
       message: 'Đặt hàng thành công', 
       order: newOrder 
@@ -117,7 +125,12 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
-    await Order.update(req.body, { where: { OrderID: req.params.id } });
+    const order = await Order.findByPk(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    const previousStatus = String(order.Status || '').trim().toLowerCase();
+    await order.update(req.body);
+    const nextStatus = String(order.Status || '').trim().toLowerCase();
+    if (nextStatus && nextStatus !== previousStatus) await notifyOrderStatus(order, order.Status);
     res.status(200).json({ message: 'Updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -232,6 +245,8 @@ exports.handlePayOSWebhook = async (req, res) => {
 
     if (webhookData.code === '00' && payment.Status !== 'PAID') {
       await payment.update({ Status: 'PAID', PaidAt: new Date() });
+      const order = await Order.findByPk(payment.OrderID);
+      if (order) await notifyOrderPaid(order);
     }
     return res.status(200).json({ success: true });
   } catch (err) {
@@ -247,11 +262,44 @@ exports.getPaymentStatus = async (req, res) => {
     const order = await Order.findOne({ where: { OrderID: orderId, UserID: userId } });
     if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
 
-    const payment = await PaymentTransaction.findOne({
+    let payment = await PaymentTransaction.findOne({
       where: { OrderID: orderId },
       order: [['CreatedAt', 'DESC']],
-      attributes: ['Status', 'Amount', 'CreatedAt', 'PaidAt']
+      attributes: ['PaymentTransactionID', 'PayOSOrderCode', 'PayOSPaymentLinkID', 'Status', 'Amount', 'CreatedAt', 'PaidAt']
     });
+
+    if (payment?.Status === 'PENDING' && payment.PayOSOrderCode) {
+      const orderCode = Number(payment.PayOSOrderCode);
+      const lastCheck = payOSStatusSyncChecks.get(orderCode) || 0;
+      if (Number.isSafeInteger(orderCode) && Date.now() - lastCheck >= PAYOS_STATUS_SYNC_INTERVAL_MS) {
+        payOSStatusSyncChecks.set(orderCode, Date.now());
+        try {
+          const payOSLink = await getPayOS().paymentRequests.get(orderCode);
+          const expectedAmount = Math.round(Number(payment.Amount));
+          const paidAmount = Math.round(Number(payOSLink.amountPaid));
+
+          if (payOSLink.orderCode === orderCode && payOSLink.status === 'PAID' && paidAmount === expectedAmount) {
+            await payment.update({ Status: 'PAID', PaidAt: new Date() });
+            const paidOrder = await Order.findByPk(payment.OrderID);
+            if (paidOrder) await notifyOrderPaid(paidOrder);
+          } else if (payOSLink.orderCode === orderCode && ['CANCELLED', 'EXPIRED', 'FAILED'].includes(payOSLink.status)) {
+            await payment.update({ Status: 'FAILED' });
+          }
+        } catch (syncError) {
+          // Webhook remains the primary path. A temporary provider error should not
+          // prevent the UI from displaying the last known database status.
+          console.error('PayOS status sync failed:', syncError.message);
+        }
+      }
+    }
+
+    if (payment && payment.Status === 'PENDING' && payOSStatusSyncChecks.size > 500) {
+      const cutoff = Date.now() - PAYOS_STATUS_SYNC_INTERVAL_MS * 6;
+      for (const [checkedOrderCode, checkedAt] of payOSStatusSyncChecks) {
+        if (checkedAt < cutoff) payOSStatusSyncChecks.delete(checkedOrderCode);
+      }
+    }
+
     return res.status(200).json({ payment: payment || null });
   } catch (err) {
     return res.status(500).json({ error: err.message });
