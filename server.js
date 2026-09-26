@@ -3,7 +3,9 @@ const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const { DataTypes } = require('sequelize');
 const { sequelize } = require('./src/models');
+const Order = require('./src/models/Order');
 require('dotenv').config();
 
 const app = express();
@@ -61,7 +63,28 @@ app.use((err, _req, res, _next) => {
 });
 
 const PORT = Number(process.env.PORT || 5000);
+async function ensureOrderInventoryColumn() {
+  const queryInterface = sequelize.getQueryInterface();
+  const tableName = Order.getTableName();
+  const columns = await queryInterface.describeTable(tableName);
+  if (!columns.InventoryReserved) {
+    await queryInterface.addColumn(tableName, 'InventoryReserved', {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    });
+  }
+  for (const [name, definition] of Object.entries({
+    CarrierName: { type: DataTypes.STRING(100), allowNull: true },
+    TrackingNumber: { type: DataTypes.STRING(150), allowNull: true },
+    EstimatedDelivery: { type: DataTypes.DATEONLY, allowNull: true },
+  })) {
+    if (!columns[name]) await queryInterface.addColumn(tableName, name, definition);
+  }
+}
+
 sequelize.authenticate()
   .then(() => sequelize.sync())
+  .then(ensureOrderInventoryColumn)
   .then(() => app.listen(PORT, '0.0.0.0', () => console.log(`API running on port ${PORT}`)))
   .catch(err => { console.error('Database startup error:', err); process.exitCode = 1; });

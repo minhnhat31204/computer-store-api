@@ -1,4 +1,5 @@
-const { Order, OrderItem, User, Product, CartItemDB, PaymentTransaction, Voucher } = require('../models');
+const { Transaction } = require('sequelize');
+const { sequelize, Order, OrderItem, User, Product, CartItemDB, PaymentTransaction, Voucher, OrderStatusHistory } = require('../models');
 const { getPayOS } = require('../services/payos');
 const { notifyOrderCreated, notifyOrderStatus, notifyOrderPaid } = require('../services/orderNotifications');
 
@@ -7,22 +8,195 @@ const { notifyOrderCreated, notifyOrderStatus, notifyOrderPaid } = require('../s
 const payOSStatusSyncChecks = new Map();
 const PAYOS_STATUS_SYNC_INTERVAL_MS = 10000;
 
+function isDeliveredStatus(status) {
+  return ['delivered', 'completed', 'complete'].includes(String(status || '').trim().toLowerCase());
+}
+
+function isCancelledStatus(status) {
+  return ['cancelled', 'canceled'].includes(String(status || '').trim().toLowerCase());
+}
+
+async function adjustOrderInventory(orderId, direction, transaction) {
+  const items = await OrderItem.findAll({ where: { OrderID: orderId }, transaction });
+  const quantities = new Map();
+  for (const item of items) {
+    const productId = Number(item.ProductID);
+    const quantity = Number(item.Quantity);
+    if (!Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error('Chi tiết đơn hàng có số lượng sản phẩm không hợp lệ.');
+    }
+    quantities.set(productId, (quantities.get(productId) || 0) + quantity);
+  }
+
+  for (const [productId, quantity] of [...quantities.entries()].sort(([a], [b]) => a - b)) {
+    const product = await Product.findByPk(productId, { transaction });
+    if (!product) throw new Error(`Không tìm thấy sản phẩm #${productId} để cập nhật tồn kho.`);
+    const stock = Number(product.StockQuantity) || 0;
+    if (direction < 0 && stock < quantity) {
+      const error = new Error(`Sản phẩm "${product.ProductName}" chỉ còn ${stock} sản phẩm trong kho.`);
+      error.statusCode = 409;
+      throw error;
+    }
+    await product.update({ StockQuantity: stock + direction * quantity }, { transaction });
+  }
+}
+
+async function cancelPendingPayOSPayment(order, transaction) {
+  if (String(order.PaymentMethod || '').toLowerCase() !== 'payos') return;
+  const payment = await PaymentTransaction.findOne({
+    where: { OrderID: order.OrderID },
+    order: [['PaymentTransactionID', 'DESC']],
+    transaction
+  });
+  if (!payment || payment.Status !== 'PENDING') {
+    if (payment?.Status === 'PAID') {
+      const error = new Error('Đơn hàng đã được thanh toán nên không thể hủy.');
+      error.statusCode = 409;
+      throw error;
+    }
+    return;
+  }
+
+  const paymentIdentifier = payment.PayOSPaymentLinkID || Number(payment.PayOSOrderCode);
+  let remotePayment = await getPayOS().paymentRequests.get(paymentIdentifier);
+  if (remotePayment.status === 'PENDING') {
+    remotePayment = await getPayOS().paymentRequests.cancel(paymentIdentifier, 'Khách hàng hoặc cửa hàng đã hủy đơn hàng');
+  }
+  if (remotePayment.status === 'PAID') {
+    const error = new Error('PayOS đã nhận thanh toán; không thể hủy đơn hàng.');
+    error.statusCode = 409;
+    error.paidPaymentId = payment.PaymentTransactionID;
+    throw error;
+  }
+  if (['CANCELLED', 'EXPIRED', 'FAILED'].includes(remotePayment.status)) {
+    await payment.update({ Status: remotePayment.status }, { transaction });
+    return;
+  }
+  const error = new Error('Chưa thể xác nhận hủy liên kết PayOS. Vui lòng thử lại.');
+  error.statusCode = 502;
+  throw error;
+}
+
+async function persistPaidPaymentFromConflict(error) {
+  if (!error.paidPaymentId) return;
+  const payment = await PaymentTransaction.findByPk(error.paidPaymentId);
+  if (!payment || payment.Status === 'PAID') return;
+  await payment.update({ Status: 'PAID', PaidAt: payment.PaidAt || new Date() });
+  const order = await Order.findByPk(payment.OrderID);
+  if (order) await notifyOrderPaid(order);
+}
+
+async function changeOrderStatus(order, status, transaction, payOSAlreadyResolved = false, actorUserId = null, note = null) {
+  const previousValue = order.Status || null;
+  const previousStatus = String(previousValue || '').trim().toLowerCase();
+  if (isDeliveredStatus(previousStatus) && previousStatus !== status.toLowerCase()) {
+    const error = new Error('Đơn hàng đã giao, không thể thay đổi tiến độ.');
+    error.statusCode = 409;
+    throw error;
+  }
+  if (previousStatus === status.toLowerCase()) return false;
+
+  let inventoryReserved = Boolean(order.InventoryReserved);
+  if (!isCancelledStatus(previousStatus) && status.toLowerCase() === 'cancelled') {
+    if (!payOSAlreadyResolved) await cancelPendingPayOSPayment(order, transaction);
+    if (inventoryReserved) await adjustOrderInventory(order.OrderID, 1, transaction);
+    inventoryReserved = false;
+  } else if (isCancelledStatus(previousStatus) && status.toLowerCase() !== 'cancelled') {
+    await adjustOrderInventory(order.OrderID, -1, transaction);
+    inventoryReserved = true;
+  }
+  await order.update({ Status: status, InventoryReserved: inventoryReserved }, { transaction });
+  await OrderStatusHistory.create({
+    OrderID: order.OrderID,
+    ActorUserID: actorUserId || null,
+    PreviousStatus: previousValue,
+    NewStatus: status,
+    Note: note || null,
+  }, { transaction });
+  return true;
+}
+
+exports.cancelByUser = async (req, res) => {
+  try {
+    const userId = Number(req.body.UserID);
+    const result = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const order = await Order.findByPk(req.params.id, { transaction });
+      if (!order || Number(order.UserID) !== userId) return { missing: true };
+      if (String(order.Status || '').trim().toLowerCase() !== 'pending') {
+        const error = new Error('Chỉ có thể hủy đơn đang chờ xác nhận.');
+        error.statusCode = 409;
+        throw error;
+      }
+      const changed = await changeOrderStatus(order, 'Cancelled', transaction, false, userId, 'Khách hàng hủy đơn');
+      return { order, changed };
+    });
+    if (result.missing) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    if (result.changed) await notifyOrderStatus(result.order, 'Cancelled');
+    return res.json({ message: 'Đã hủy đơn hàng.', order: result.order });
+  } catch (error) {
+    await persistPaidPaymentFromConflict(error).catch((persistError) => console.error('PayOS paid-state sync failed:', persistError.message));
+    return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Không hủy được đơn hàng.' });
+  }
+};
+
 // 1. Lấy tất cả đơn hàng (bao gồm OrderItems và Chi tiết sản phẩm)
 exports.getAll = async (req, res) => {
   try {
     const data = await Order.findAll({
       include: [
-        { model: User, attributes: ['FullName'] },
+        { model: User, attributes: ['FullName', 'Email', 'Phone'] },
         { 
           model: OrderItem, 
-          include: [{ model: Product, attributes: ['ProductName', 'Price'] }] 
-        }
+          include: [{ model: Product, attributes: ['ProductName', 'Price', 'ImageUrl'] }]
+        },
+        { model: PaymentTransaction, as: 'Payments', separate: true, limit: 1, order: [['PaymentTransactionID', 'DESC']], attributes: ['PaymentTransactionID', 'Status', 'Amount', 'CreatedAt', 'PaidAt'] },
       ],
       order: [['OrderID', 'DESC']]
     });
     res.status(200).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+exports.getStatusHistory = async (req, res) => {
+  try {
+    const order = await Order.findByPk(req.params.id, { attributes: ['OrderID'] });
+    if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    const history = await OrderStatusHistory.findAll({
+      where: { OrderID: order.OrderID },
+      order: [['ChangedAt', 'ASC'], ['StatusHistoryID', 'ASC']],
+    });
+    const actorIds = [...new Set(history.map((entry) => Number(entry.ActorUserID)).filter((id) => Number.isInteger(id) && id > 0))];
+    const actors = actorIds.length
+      ? await User.findAll({ where: { UserID: actorIds }, attributes: ['UserID', 'FullName', 'Email'] })
+      : [];
+    const actorById = new Map(actors.map((actor) => [Number(actor.UserID), actor]));
+    return res.json(history.map((entry) => ({ ...entry.toJSON(), Actor: actorById.get(Number(entry.ActorUserID)) || null })));
+  } catch (error) {
+    return res.status(500).json({ error: 'Không tải được lịch sử trạng thái đơn hàng.' });
+  }
+};
+
+exports.updateStatus = async (req, res) => {
+  try {
+    const allowedStatuses = new Set(['Pending', 'Confirmed', 'Processing', 'Shipping', 'Delivered', 'Cancelled']);
+    const status = String(req.body.Status || '').trim();
+    if (!allowedStatuses.has(status)) {
+      return res.status(400).json({ error: 'Tiến độ đơn hàng không hợp lệ.' });
+    }
+    const result = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const order = await Order.findByPk(req.params.id, { transaction });
+      if (!order) return { missing: true };
+      const changed = await changeOrderStatus(order, status, transaction, false, req.user?.UserID, req.body.Note);
+      return { order, changed };
+    });
+    if (result.missing) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    if (result.changed) await notifyOrderStatus(result.order, status);
+    return res.json({ message: result.changed ? 'Đã cập nhật tiến độ đơn hàng.' : 'Tiến độ đơn hàng không thay đổi.', order: result.order });
+  } catch (error) {
+    await persistPaidPaymentFromConflict(error).catch((persistError) => console.error('PayOS paid-state sync failed:', persistError.message));
+    return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Không cập nhật được tiến độ đơn hàng.' });
   }
 };
 
@@ -54,7 +228,19 @@ exports.getByUserId = async (req, res) => {
 // 3. Tạo Đơn hàng kèm theo danh sách OrderItems và Tự động xóa giỏ hàng
 exports.create = async (req, res) => {
   try {
-    const { UserID, TotalAmount, PaymentMethod, Status, Items, RecipientName, RecipientPhone, ShippingAddress, Note, VoucherID } = req.body;
+    const { UserID, TotalAmount, PaymentMethod, Items, RecipientName, RecipientPhone, ShippingAddress, Note, VoucherID } = req.body;
+
+    if (!Array.isArray(Items) || Items.length === 0) {
+      return res.status(400).json({ error: 'Đơn hàng cần có ít nhất một sản phẩm.' });
+    }
+    const orderItemsData = Items.map((item) => ({
+      ProductID: Number(item.ProductID || item.productID || item.ID),
+      Quantity: Number(item.Quantity || item.quantity || 1),
+      UnitPrice: Number(item.UnitPrice ?? item.Price ?? item.price ?? 0)
+    }));
+    if (orderItemsData.some((item) => !Number.isInteger(item.ProductID) || item.ProductID <= 0 || !Number.isInteger(item.Quantity) || item.Quantity <= 0 || !Number.isFinite(item.UnitPrice) || item.UnitPrice < 0)) {
+      return res.status(400).json({ error: 'Thông tin sản phẩm trong đơn hàng không hợp lệ.' });
+    }
 
     let discountAmount = 0;
     let voucherCode = null;
@@ -76,40 +262,44 @@ exports.create = async (req, res) => {
       voucherCode = voucher.Code;
     }
 
-    // Tạo bản ghi Order trước
-    const newOrder = await Order.create({
-      UserID,
-      TotalAmount,
-      PaymentMethod: PaymentMethod || 'VNPAY-QR',
-      Status: Status || 'Pending',
-      RecipientName,
-      RecipientPhone,
-      ShippingAddress,
-      Note,
-      DiscountAmount: discountAmount,
-      VoucherCode: voucherCode ? String(voucherCode).trim().slice(0, 50) : null,
-      VoucherID: VoucherID ? Number(VoucherID) : null
+    const newOrder = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const quantities = new Map();
+      for (const item of orderItemsData) quantities.set(item.ProductID, (quantities.get(item.ProductID) || 0) + item.Quantity);
+      for (const [productId, quantity] of [...quantities.entries()].sort(([a], [b]) => a - b)) {
+        const product = await Product.findByPk(productId, { transaction });
+        if (!product) {
+          const error = new Error(`Không tìm thấy sản phẩm #${productId}.`);
+          error.statusCode = 400;
+          throw error;
+        }
+        const stock = Number(product.StockQuantity) || 0;
+        if (stock < quantity) {
+          const error = new Error(`Sản phẩm "${product.ProductName}" chỉ còn ${stock} sản phẩm trong kho.`);
+          error.statusCode = 409;
+          throw error;
+        }
+        await product.update({ StockQuantity: stock - quantity }, { transaction });
+      }
+
+      const order = await Order.create({
+        UserID,
+        TotalAmount,
+        PaymentMethod: PaymentMethod || 'VNPAY-QR',
+        Status: 'Pending',
+        InventoryReserved: true,
+        RecipientName,
+        RecipientPhone,
+        ShippingAddress,
+        Note,
+        DiscountAmount: discountAmount,
+        VoucherCode: voucherCode ? String(voucherCode).trim().slice(0, 50) : null,
+        VoucherID: VoucherID ? Number(VoucherID) : null
+      }, { transaction });
+      await OrderStatusHistory.create({ OrderID: order.OrderID, NewStatus: 'Pending', Note: 'Đơn hàng được tạo' }, { transaction });
+      await OrderItem.bulkCreate(orderItemsData.map((item) => ({ ...item, OrderID: order.OrderID })), { transaction });
+      if (UserID) await CartItemDB.destroy({ where: { UserID }, transaction });
+      return order;
     });
-
-    // Nếu có danh sách items gửi lên, duyệt và lưu vào bảng OrderItem
-    if (Items && Array.isArray(Items) && Items.length > 0) {
-      const orderItemsData = Items.map(item => ({
-        OrderID: newOrder.OrderID,
-        ProductID: item.ProductID || item.productID || item.ID,
-        Quantity: item.Quantity || item.quantity || 1,
-        UnitPrice: item.UnitPrice || item.Price || item.price || 0
-      }));
-
-      // Thêm toàn bộ các sản phẩm vào CSDL cùng lúc
-      await OrderItem.bulkCreate(orderItemsData);
-    }
-
-    // Tự động xóa toàn bộ sản phẩm trong giỏ hàng (CartItemDB) của User sau khi đặt hàng thành công
-    if (UserID) {
-      await CartItemDB.destroy({
-        where: { UserID: UserID }
-      });
-    }
 
     await notifyOrderCreated(newOrder);
 
@@ -119,29 +309,60 @@ exports.create = async (req, res) => {
     });
   } catch (err) {
     console.error("Lỗi tạo đơn hàng:", err);
-    res.status(400).json({ error: err.message });
+    res.status(err.statusCode || 400).json({ error: err.message });
   }
 };
 
 exports.update = async (req, res) => {
   try {
-    const order = await Order.findByPk(req.params.id);
-    if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
-    const previousStatus = String(order.Status || '').trim().toLowerCase();
-    await order.update(req.body);
-    const nextStatus = String(order.Status || '').trim().toLowerCase();
-    if (nextStatus && nextStatus !== previousStatus) await notifyOrderStatus(order, order.Status);
-    res.status(200).json({ message: 'Updated successfully' });
+    const result = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const order = await Order.findByPk(req.params.id, { transaction });
+      if (!order) return { missing: true };
+      const { Status, InventoryReserved: _inventoryReserved, ...fields } = req.body;
+      const permittedFields = ['CarrierName', 'TrackingNumber', 'EstimatedDelivery'];
+      if (Object.keys(fields).some((field) => !permittedFields.includes(field))) {
+        const error = new Error('Chỉ có thể cập nhật thông tin vận chuyển tại đây.');
+        error.statusCode = 400;
+        throw error;
+      }
+      await order.update(fields, { transaction });
+      let changed = false;
+      if (Status !== undefined) {
+        const allowedStatuses = new Set(['Pending', 'Confirmed', 'Processing', 'Shipping', 'Delivered', 'Cancelled']);
+        const status = String(Status).trim();
+        if (!allowedStatuses.has(status)) {
+          const error = new Error('Tiến độ đơn hàng không hợp lệ.');
+          error.statusCode = 400;
+          throw error;
+        }
+        changed = await changeOrderStatus(order, status, transaction, false, req.user?.UserID, req.body.Note);
+      }
+      return { order, changed };
+    });
+    if (result.missing) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    if (result.changed) await notifyOrderStatus(result.order, result.order.Status);
+    return res.status(200).json({ message: 'Updated successfully', order: result.order });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    await persistPaidPaymentFromConflict(err).catch((persistError) => console.error('PayOS paid-state sync failed:', persistError.message));
+    return res.status(err.statusCode || 500).json({ error: err.message });
   }
 };
 
 exports.delete = async (req, res) => {
   try {
-    await Order.destroy({ where: { OrderID: req.params.id } });
+    await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const order = await Order.findByPk(req.params.id, { transaction });
+      if (!order) return;
+      if (order.InventoryReserved && !isCancelledStatus(order.Status) && !isDeliveredStatus(order.Status)) {
+        await cancelPendingPayOSPayment(order, transaction);
+        await adjustOrderInventory(order.OrderID, 1, transaction);
+      }
+      await OrderStatusHistory.destroy({ where: { OrderID: order.OrderID }, transaction });
+      await order.destroy({ transaction });
+    });
     res.status(200).json({ message: 'Deleted successfully' });
   } catch (err) {
+    await persistPaidPaymentFromConflict(err).catch((persistError) => console.error('PayOS paid-state sync failed:', persistError.message));
     res.status(500).json({ error: err.message });
   }
 };
@@ -268,6 +489,7 @@ exports.getPaymentStatus = async (req, res) => {
       attributes: ['PaymentTransactionID', 'PayOSOrderCode', 'PayOSPaymentLinkID', 'Status', 'Amount', 'CreatedAt', 'PaidAt']
     });
 
+    let synchronizedOrderStatus;
     if (payment?.Status === 'PENDING' && payment.PayOSOrderCode) {
       const orderCode = Number(payment.PayOSOrderCode);
       const lastCheck = payOSStatusSyncChecks.get(orderCode) || 0;
@@ -283,7 +505,23 @@ exports.getPaymentStatus = async (req, res) => {
             const paidOrder = await Order.findByPk(payment.OrderID);
             if (paidOrder) await notifyOrderPaid(paidOrder);
           } else if (payOSLink.orderCode === orderCode && ['CANCELLED', 'EXPIRED', 'FAILED'].includes(payOSLink.status)) {
-            await payment.update({ Status: 'FAILED' });
+            const finalStatus = payOSLink.status === 'CANCELLED' ? 'CANCELLED' : 'FAILED';
+            const syncResult = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+              const currentPayment = await PaymentTransaction.findByPk(payment.PaymentTransactionID, { transaction });
+              const currentOrder = await Order.findByPk(orderId, { transaction });
+              if (!currentPayment || currentPayment.Status !== 'PENDING' || !currentOrder) {
+                return { payment: currentPayment, order: currentOrder, changed: false };
+              }
+              await currentPayment.update({ Status: finalStatus }, { transaction });
+              let changed = false;
+              if (payOSLink.status === 'EXPIRED' && String(currentOrder.Status || '').toLowerCase() === 'pending') {
+                changed = await changeOrderStatus(currentOrder, 'Cancelled', transaction, true);
+              }
+              return { payment: currentPayment, order: currentOrder, changed };
+            });
+            payment = syncResult.payment || payment;
+            synchronizedOrderStatus = syncResult.order?.Status;
+            if (syncResult.changed && syncResult.order) await notifyOrderStatus(syncResult.order, 'Cancelled');
           }
         } catch (syncError) {
           // Webhook remains the primary path. A temporary provider error should not
@@ -300,7 +538,13 @@ exports.getPaymentStatus = async (req, res) => {
       }
     }
 
-    return res.status(200).json({ payment: payment || null });
+    if (payment?.Status === 'PENDING') {
+      payment = await PaymentTransaction.findByPk(payment.PaymentTransactionID, {
+        attributes: ['PaymentTransactionID', 'PayOSOrderCode', 'PayOSPaymentLinkID', 'Status', 'Amount', 'CreatedAt', 'PaidAt']
+      });
+    }
+    const latestOrder = synchronizedOrderStatus ? null : await Order.findOne({ where: { OrderID: orderId, UserID: userId }, attributes: ['Status'] });
+    return res.status(200).json({ payment: payment || null, orderStatus: synchronizedOrderStatus || latestOrder?.Status });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

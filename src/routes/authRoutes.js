@@ -3,6 +3,7 @@ const authController = require('../controllers/authController');
 
 // Khai báo đường dẫn đăng ký và đăng nhập
 router.post('/register', authController.register);
+router.post('/register/send-otp', authController.sendRegistrationOtp);
 router.post('/login', authController.login);
 router.post('/firebase-phone-login', authController.firebasePhoneLogin);
 

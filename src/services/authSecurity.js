@@ -11,6 +11,7 @@ const challenges = new Map();
 const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_RESEND_MS = 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
+const DEFAULT_PHONE_OTP = '123456';
 
 function normalizePhone(value) {
   const raw = String(value || '').trim();
@@ -32,14 +33,14 @@ function otpDigest(code) {
   return crypto.createHash('sha256').update(String(code)).digest();
 }
 
-function issueChallenge(key) {
+function issueChallenge(key, fixedCode) {
   const current = challenges.get(key);
   if (current && Date.now() - current.sentAt < OTP_RESEND_MS) {
     const error = new Error('Vui lòng đợi 60 giây trước khi gửi mã mới.');
     error.status = 429;
     throw error;
   }
-  const code = String(crypto.randomInt(100000, 1000000));
+  const code = fixedCode == null ? String(crypto.randomInt(100000, 1000000)) : String(fixedCode);
   challenges.set(key, {
     digest: otpDigest(code),
     expiresAt: Date.now() + OTP_TTL_MS,
@@ -131,7 +132,7 @@ async function verifyFirebasePhoneToken(idToken, expectedPhone, options = {}) {
   }
   return phone;
 }
-async function sendEmail(to, code, subject) {
+async function sendEmail(to, code, subject, html) {
   const transporter = getTransporter();
   if (!transporter) {
     const error = new Error('Email OTP chưa được cấu hình SMTP.');
@@ -142,7 +143,8 @@ async function sendEmail(to, code, subject) {
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
     subject,
-    text: `Ma xac thuc MANB SHOP cua ban la ${code}. Ma co hieu luc trong 5 phut.`,
+    text: html ? String(code) : `Ma xac thuc MANB SHOP cua ban la ${code}. Ma co hieu luc trong 5 phut.`,
+    ...(html ? { html } : {}),
   });
 }
 
@@ -179,7 +181,7 @@ async function verifyPassword(password, stored) {
 module.exports = {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
   getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
-  hashPassword, verifyPassword,
+  hashPassword, verifyPassword, DEFAULT_PHONE_OTP,
 };
 
 

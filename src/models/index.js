@@ -15,6 +15,7 @@ const Favorite = require('./Favorite');
 const PaymentTransaction = require('./PaymentTransaction');
 const AddressBookEntry = require('./AddressBookEntry');
 const Notification = require('./Notification');
+const OrderStatusHistory = require('./OrderStatusHistory');
 
 // 1. Category 1 - N Product
 Category.hasMany(Product, { foreignKey: 'CategoryID' });
@@ -35,6 +36,8 @@ Order.hasMany(Notification, { foreignKey: 'OrderID' });
 Notification.belongsTo(Order, { foreignKey: 'OrderID' });
 Order.hasMany(PaymentTransaction, { foreignKey: 'OrderID', as: 'Payments' });
 PaymentTransaction.belongsTo(Order, { foreignKey: 'OrderID', as: 'Order' });
+// Keep the audit references as scalar IDs. Sequelize associations would make sync()
+// add foreign keys that SQL Server rejects in this store schema.
 
 // 4. Order 1 - N OrderItem
 Order.hasMany(OrderItem, { foreignKey: 'OrderID' });
@@ -106,4 +109,5 @@ module.exports = {
   PaymentTransaction,
   AddressBookEntry,
   Notification,
+  OrderStatusHistory,
 };

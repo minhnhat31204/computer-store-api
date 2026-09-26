@@ -1,4 +1,7 @@
 const Notification = require('../models/Notification');
+const { User } = require('../models');
+const OrderStatusHistory = require('../models/OrderStatusHistory');
+const { sendEmail } = require('./authSecurity');
 
 const STATUS_COPY = {
   pending: ['Đơn hàng đang chờ xác nhận', 'Cửa hàng đang tiếp nhận đơn hàng'],
@@ -48,14 +51,26 @@ async function notifyOrderStatus(order, status) {
   const id = Number(order.OrderID);
   const value = String(status || '').trim().toLowerCase();
   const [title, description] = STATUS_COPY[value] || ['Trạng thái đơn hàng đã cập nhật', `Trạng thái mới: ${status}`];
+  const latestHistory = await OrderStatusHistory.findOne({ where: { OrderID: id }, order: [['StatusHistoryID', 'DESC']], attributes: ['StatusHistoryID'] }).catch(() => null);
   await createOrderNotification({
     userId: order.UserID,
     orderId: id,
-    eventKey: `order:${id}:status:${value || 'unknown'}`,
+    eventKey: `order:${id}:status:${latestHistory?.StatusHistoryID || Date.now()}:${value || 'unknown'}`,
     type: 'ORDER_STATUS',
     title,
     message: `${description} (đơn hàng #${id}).`,
   });
+  try {
+    const user = await User.findByPk(order.UserID, { attributes: ['Email', 'FullName'] });
+    if (user?.Email) {
+      const name = String(user.FullName || 'bạn').replace(/[<>]/g, '');
+      const label = String(status || '').replace(/[<>]/g, '');
+      await sendEmail(user.Email, label, `Cập nhật đơn hàng #${id} MANB SHOP`,
+        `<p>Xin chào ${name},</p><p>Đơn hàng <strong>#${id}</strong> đã chuyển sang trạng thái: <strong>${label}</strong>.</p><p>Đăng nhập MANB SHOP để xem chi tiết đơn hàng.</p>`);
+    }
+  } catch (error) {
+    console.error('Order status email failed:', error.message);
+  }
 }
 
 async function notifyOrderPaid(order) {

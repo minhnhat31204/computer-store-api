@@ -6,6 +6,10 @@ const Order = sequelize.define('Order', {
   UserID: { type: DataTypes.INTEGER, allowNull: false }, // FK
   OrderDate: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   Status: { type: DataTypes.STRING },
+  InventoryReserved: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  CarrierName: { type: DataTypes.STRING(100), allowNull: true },
+  TrackingNumber: { type: DataTypes.STRING(150), allowNull: true },
+  EstimatedDelivery: { type: DataTypes.DATEONLY, allowNull: true },
   TotalAmount: { type: DataTypes.DECIMAL(18, 2) },
   RecipientName: { type: DataTypes.STRING },
   RecipientPhone: { type: DataTypes.STRING },

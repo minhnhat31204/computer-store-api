@@ -1,4 +1,5 @@
-const { CartItemDB, Product } = require('../models');
+const { Transaction } = require('sequelize');
+const { sequelize, CartItemDB, Product } = require('../models');
 
 // Giáº£i thÃ­ch sá»­a lá»—i: Biáº¿n Ä‘á»•i dá»¯ liá»‡u (format) Ä‘á»ƒ Ä‘Æ°a thÃ´ng tin tá»« báº£ng Product (ProductName, ImageUrl...)
 // ra ngoÃ i cÃ¹ng má»™t cáº¥p vá»›i CartItemDB giÃºp Flutter Ä‘á»c Ä‘Æ°á»£c trá»±c tiáº¿p.
@@ -14,6 +15,7 @@ const formatCartItem = (item) => {
     ImageUrl: product.ImageUrl || product.IMAGEURL || '',
     Price: product.Price || plain.Price || 0,
     DiscountPrice: product.DiscountPrice || product.Price || plain.Price || 0,
+    StockQuantity: Number(product.StockQuantity) || 0,
   };
 };
 
@@ -52,21 +54,32 @@ exports.addToCart = async (req, res) => {
   try {
     const { UserID, ProductID, Quantity, Price } = req.body;
 
-    let item = await CartItemDB.findOne({
-      where: { UserID, ProductID }
-    });
-
-    if (item) {
-      item.Quantity += Number(Quantity);
-      await item.save();
-    } else {
-      item = await CartItemDB.create({
-        UserID,
-        ProductID,
-        Quantity,
-        Price
-      });
+    const userId = Number(UserID);
+    const productId = Number(ProductID);
+    const quantityToAdd = Number(Quantity);
+    if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantityToAdd) || quantityToAdd <= 0) {
+      return res.status(400).json({ error: 'Thông tin sản phẩm trong giỏ hàng không hợp lệ.' });
     }
+
+    const item = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const product = await Product.findByPk(productId, { transaction });
+      if (!product) {
+        const error = new Error('Không tìm thấy sản phẩm.');
+        error.statusCode = 404;
+        throw error;
+      }
+      let cartItem = await CartItemDB.findOne({ where: { UserID: userId, ProductID: productId }, transaction });
+      const nextQuantity = Number(cartItem?.Quantity || 0) + quantityToAdd;
+      const stock = Number(product.StockQuantity) || 0;
+      if (nextQuantity > stock) {
+        const error = new Error(`Sản phẩm chỉ còn ${stock} sản phẩm trong kho.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      if (cartItem) await cartItem.update({ Quantity: nextQuantity }, { transaction });
+      else cartItem = await CartItemDB.create({ UserID: userId, ProductID: productId, Quantity: nextQuantity, Price: Price ?? product.Price }, { transaction });
+      return cartItem;
+    });
 
     // Láº¥y láº¡i thÃ´ng tin hoÃ n chá»‰nh kÃ¨m Product Ä‘á»ƒ tráº£ vá» cho Flutter
     const fullItem = await CartItemDB.findOne({
@@ -81,7 +94,7 @@ exports.addToCart = async (req, res) => {
 
   } catch (error) {
     console.error("Lá»—i thÃªm giá» hÃ ng:", error);
-    return res.status(500).json({ message: "Lá»—i mÃ¡y chá»§ ná»™i bá»™", error: error.message });
+    return res.status(error.statusCode || 500).json({ message: error.message, error: error.message });
   }
 };
 
@@ -90,23 +103,31 @@ exports.update = async (req, res) => {
   try {
     const { ID, Quantity } = req.body;
     const cartItemId = req.params.id || ID;
+    const quantity = Number(Quantity);
 
     if (!cartItemId) {
       return res.status(400).json({ message: "Thiáº¿u ID sáº£n pháº©m giá» hÃ ng" });
     }
+    if (!Number.isInteger(quantity) || quantity <= 0) return res.status(400).json({ error: 'Số lượng phải lớn hơn 0.' });
 
-    const [updatedRows] = await CartItemDB.update(
-      { Quantity: Number(Quantity) },
-      { where: { ID: cartItemId } }
-    );
-
-    if (updatedRows > 0) {
-      res.status(200).json({ message: 'Cáº­p nháº­t thÃ nh cÃ´ng!' });
-    } else {
-      res.status(404).json({ message: 'KhÃ´ng tÃ¬m tháº¥y sáº£n pháº©m trong giá»!' });
-    }
+    const result = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const item = await CartItemDB.findByPk(cartItemId, { transaction });
+      if (!item) return { missing: true };
+      const product = await Product.findByPk(item.ProductID, { transaction });
+      if (!product) return { missing: true };
+      const stock = Number(product.StockQuantity) || 0;
+      if (quantity > stock) {
+        const error = new Error(`Sản phẩm chỉ còn ${stock} sản phẩm trong kho.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      await item.update({ Quantity: quantity }, { transaction });
+      return { item };
+    });
+    if (result.missing) return res.status(404).json({ error: 'Không tìm thấy sản phẩm trong giỏ.' });
+    return res.status(200).json({ message: 'Cập nhật thành công!' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 };
 
