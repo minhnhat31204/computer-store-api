@@ -98,14 +98,23 @@ exports.updateProfile = async (req, res) => {
 
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
+
     user.FullName = fullName;
+    if (req.body.username !== undefined) user.Username = String(req.body.username || '').trim() || null;
+    if (req.body.bio !== undefined) user.Bio = String(req.body.bio || '').trim() || null;
+    if (req.body.gender !== undefined) user.Gender = String(req.body.gender || '').trim() || null;
+    if (req.body.birthday !== undefined) user.Birthday = req.body.birthday ? String(req.body.birthday).trim() : null;
+    if (req.body.phone !== undefined) user.Phone = String(req.body.phone || '').trim() || null;
+    if (req.body.address !== undefined) user.Address = String(req.body.address || '').trim() || null;
     if (req.file) user.Avatar = `/uploads/${req.file.filename}`;
+
     await user.save();
 
     const safeUser = user.toJSON();
     delete safeUser.PasswordHash;
     return res.json({ message: 'Đã cập nhật hồ sơ.', user: safeUser });
   } catch (error) {
+    console.error('Lỗi updateProfile:', error);
     return res.status(500).json({ error: 'Không cập nhật được hồ sơ.' });
   }
 };

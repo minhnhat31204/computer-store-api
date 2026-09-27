@@ -267,3 +267,36 @@ exports.verifyLoginOtp = async (req, res) => {
     return sendError(res, error, 'Đăng nhập OTP thất bại.');
   }
 };
+
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = Number(req.body.userId);
+    const currentPassword = String(req.body.currentPassword || '');
+    const newPassword = String(req.body.newPassword || '');
+
+    if (!userId) return res.status(400).json({ error: 'Thiếu thông tin người dùng.' });
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới.' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Mật khẩu mới phải có ít nhất 6 ký tự.' });
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+
+    if (user.PasswordHash) {
+      const result = await verifyPassword(currentPassword, user.PasswordHash);
+      if (!result.valid) {
+        return res.status(401).json({ error: 'Mật khẩu hiện tại không chính xác.' });
+      }
+    }
+
+    user.PasswordHash = await hashPassword(newPassword);
+    await user.save();
+
+    return res.json({ message: 'Đổi mật khẩu thành công.' });
+  } catch (error) {
+    return sendError(res, error, 'Không đổi được mật khẩu.');
+  }
+};
