@@ -50,10 +50,9 @@ exports.register = async (req, res) => {
     if (existing) return res.status(409).json({ error: 'Số điện thoại đã được đăng ký.' });
 
     const passwordHash = await hashPassword(password);
-    const emailAddressToSave = email || `phone-${phone.replace(/\D/g, '')}@phone.manb.local`;
     const user = await User.create({
       FullName: String(req.body.fullName || '').trim() || (phone ? `Khách hàng ${phone.slice(-4)}` : 'Khách hàng'),
-      Email: emailAddressToSave,
+      Email: email || null,
       Phone: phone || null,
       PasswordHash: passwordHash,
       RecoveryEmailVerified: false,

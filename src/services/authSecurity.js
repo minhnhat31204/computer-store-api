@@ -17,16 +17,17 @@ function normalizePhone(value) {
   const raw = String(value || '').trim();
   const digits = raw.replace(/[\s().-]/g, '');
   let normalized;
-  if (/^0\d{9}$/.test(digits)) normalized = `+84${digits.slice(1)}`;
-  else if (/^84\d{9}$/.test(digits)) normalized = `+${digits}`;
-  else if (/^\+84\d{9}$/.test(digits)) normalized = digits;
+  if (/^0\d{9}$/.test(digits)) normalized = digits;
+  else if (/^84\d{9}$/.test(digits)) normalized = `0${digits.slice(2)}`;
+  else if (/^\+84\d{9}$/.test(digits)) normalized = `0${digits.slice(3)}`;
   else throw Object.assign(new Error('Số điện thoại Việt Nam không hợp lệ.'), { status: 400 });
   return normalized;
 }
 
 function phoneLookupValues(value) {
   const normalized = normalizePhone(value);
-  return [...new Set([normalized, `0${normalized.slice(3)}`, normalized.slice(1)])];
+  const international = `+84${normalized.slice(1)}`;
+  return [...new Set([normalized, international, international.slice(1)])];
 }
 
 function otpDigest(code) {

@@ -16,6 +16,8 @@ const PaymentTransaction = require('./PaymentTransaction');
 const AddressBookEntry = require('./AddressBookEntry');
 const Notification = require('./Notification');
 const OrderStatusHistory = require('./OrderStatusHistory');
+const SupportConversation = require('./SupportConversation');
+const SupportMessage = require('./SupportMessage');
 
 // 1. Category 1 - N Product
 Category.hasMany(Product, { foreignKey: 'CategoryID' });
@@ -110,4 +112,6 @@ module.exports = {
   AddressBookEntry,
   Notification,
   OrderStatusHistory,
+  SupportConversation,
+  SupportMessage,
 };

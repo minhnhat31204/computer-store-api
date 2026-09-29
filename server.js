@@ -56,6 +56,7 @@ app.use('/api/reviews', require('./src/routes/reviewRoutes'));
 app.use('/api/auth', require('./src/routes/authRoutes'));
 app.use('/api/favorites', require('./src/routes/favoriteRoutes'));
 app.use('/api/addresses', require('./src/routes/addressRoutes'));
+app.use('/api/support', require('./src/routes/supportRoutes'));
 
 app.use((err, _req, res, _next) => { 
   console.error(err); 
@@ -83,8 +84,18 @@ async function ensureOrderInventoryColumn() {
   }
 }
 
+async function ensurePhoneOnlyEmailSchema() {
+  const migrationPath = path.join(__dirname, 'migrations', '20260929-phone-only-users.sql');
+  const batches = fs.readFileSync(migrationPath, 'utf8')
+    .split(/^\s*GO\s*$/gim)
+    .map(batch => batch.trim())
+    .filter(Boolean);
+  for (const batch of batches) await sequelize.query(batch);
+}
+
 sequelize.authenticate()
   .then(() => sequelize.sync())
+  .then(ensurePhoneOnlyEmailSchema)
   .then(ensureOrderInventoryColumn)
   .then(() => app.listen(PORT, '0.0.0.0', () => console.log(`API running on port ${PORT}`)))
   .catch(err => { console.error('Database startup error:', err); process.exitCode = 1; });
