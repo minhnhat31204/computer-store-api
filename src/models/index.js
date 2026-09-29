@@ -30,10 +30,10 @@ User.hasMany(Order, { foreignKey: 'UserID' });
 Order.belongsTo(User, { foreignKey: 'UserID' });
 User.hasMany(AddressBookEntry, { foreignKey: 'UserID' });
 AddressBookEntry.belongsTo(User, { foreignKey: 'UserID' });
-User.hasMany(Notification, { foreignKey: 'UserID' });
-Notification.belongsTo(User, { foreignKey: 'UserID' });
-Order.hasMany(Notification, { foreignKey: 'OrderID' });
-Notification.belongsTo(Order, { foreignKey: 'OrderID' });
+User.hasMany(Notification, { foreignKey: 'UserID', constraints: false });
+Notification.belongsTo(User, { foreignKey: 'UserID', constraints: false });
+Order.hasMany(Notification, { foreignKey: 'OrderID', constraints: false });
+Notification.belongsTo(Order, { foreignKey: 'OrderID', constraints: false });
 Order.hasMany(PaymentTransaction, { foreignKey: 'OrderID', as: 'Payments' });
 PaymentTransaction.belongsTo(Order, { foreignKey: 'OrderID', as: 'Order' });
 // Keep the audit references as scalar IDs. Sequelize associations would make sync()
