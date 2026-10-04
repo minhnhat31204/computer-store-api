@@ -1,5 +1,5 @@
 const { User } = require('../models');
-const { hashPassword } = require('../services/authSecurity');
+const { hashPassword, verifyPassword } = require('../services/authSecurity');
 
 exports.getAll = async (req, res) => {
   try {
@@ -37,12 +37,60 @@ exports.update = async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(req.body, 'PasswordHash')) {
       return res.status(400).json({ error: 'Không nhận mật khẩu đã mã hóa trực tiếp.' });
     }
-    const { Password, ...fields } = req.body;
-    if (Password) fields.PasswordHash = await hashPassword(String(Password));
-    await User.update(fields, { where: { UserID: req.params.id } });
-    res.status(200).json({ message: 'Updated successfully' });
+
+    const { oldPassword, newPassword, Password, ...fields } = req.body;
+    const user = await User.findByPk(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+    }
+
+    // Nếu người dùng có nhập mật khẩu mới hoặc mật khẩu cũ
+    if (oldPassword || newPassword) {
+      // 1. Bắt buộc phải nhập đầy đủ cả 2 trường
+      if (!oldPassword || !newPassword) {
+        return res.status(400).json({ 
+          message: 'Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới.' 
+        });
+      }
+
+      // 2. Kiểm tra MẬT KHẨU CŨ (Trích xuất thuộc tính .valid)
+      const oldCheck = await verifyPassword(String(oldPassword), user.PasswordHash);
+      if (!oldCheck.valid) {
+        return res.status(400).json({ 
+          message: 'Mật khẩu cũ không chính xác.' 
+        });
+      }
+
+      // 3. Kiểm tra MẬT KHẨU MỚI (Không được trùng mật khẩu cũ)
+      const newCheck = await verifyPassword(String(newPassword), user.PasswordHash);
+      if (newCheck.valid) {
+        return res.status(400).json({ 
+          message: 'Mật khẩu mới không được trùng với mật khẩu hiện tại.' 
+        });
+      }
+
+      // 4. Mã hóa và lưu mật khẩu mới vào biến user
+      user.PasswordHash = await hashPassword(String(newPassword));
+    }
+
+    // Cập nhật các trường thông tin cá nhân khác
+    if (fields.FullName !== undefined) user.FullName = fields.FullName;
+    if (fields.Email !== undefined) user.Email = fields.Email;
+    if (fields.Address !== undefined) user.Address = fields.Address;
+    if (fields.Gender !== undefined) user.Gender = fields.Gender;
+    if (fields.Birthday !== undefined) user.Birthday = fields.Birthday;
+    if (fields.Avatar !== undefined) user.Avatar = fields.Avatar;
+
+    await user.save();
+
+    const safeUser = user.toJSON();
+    delete safeUser.PasswordHash;
+
+    return res.status(200).json({ message: 'Cập nhật thông tin thành công', user: safeUser });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Lỗi update user:", err);
+    return res.status(500).json({ message: err.message });
   }
 };
 
