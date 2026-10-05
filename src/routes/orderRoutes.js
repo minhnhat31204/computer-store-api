@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const c = require('../controllers/orderController');
 
+router.get('/payos/webhook', (req, res) => res.status(200).json({ success: true, message: 'PayOS webhook endpoint is active' }));
 router.post('/payos/webhook', c.handlePayOSWebhook);
 router.post('/:id/payos-payment', c.createPayOSPayment);
 router.get('/:id/payment-status', c.getPaymentStatus);
