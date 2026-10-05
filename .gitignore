@@ -3,3 +3,4 @@ node_modules/
 .npm-cache/
 .env.sms
 firebase-service-account*.json
+.env.example
