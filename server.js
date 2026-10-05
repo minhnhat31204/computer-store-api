@@ -70,7 +70,7 @@ const basicAuth = (req, res, next) => {
     const password = passwordParts.join(':');
 
     const adminUser = process.env.ADMIN_CONSOLE_USER || 'admin';
-    const adminPass = process.env.ADMIN_CONSOLE_PASS || 'AdminPassword2026!';
+    const adminPass = process.env.ADMIN_CONSOLE_PASS || 'admin123450';
 
     if (username === adminUser && password === adminPass) {
       return next();
