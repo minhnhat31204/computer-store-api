@@ -68,6 +68,12 @@ const handleApiRoot = (req, res) => {
 };
 
 app.get(['/', '/api', '/api/'], handleApiRoot);
+app.get(['/api/docs', '/api/swagger', '/docs', '/swagger'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'swagger.html'));
+});
+app.get(['/api/swagger.json', '/swagger.json'], (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'swagger.json'));
+});
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 const routes = [
   ['/api/categories', './src/routes/categoryRoutes'],

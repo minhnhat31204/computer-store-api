@@ -1,0 +1,420 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "MANB Computer Store API",
+    "description": "Tài liệu RESTful API cho Hệ thống Bán máy tính & Linh kiện MANB SHOP",
+    "version": "1.0.0",
+    "contact": {
+      "name": "MANB SHOP Support",
+      "url": "https://manb.id.vn",
+      "email": "support@manb.vn"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Current Server (Auto)"
+    },
+    {
+      "url": "https://manb.id.vn/api",
+      "description": "Production Server"
+    },
+    {
+      "url": "http://localhost:5000/api",
+      "description": "Local Development Server"
+    }
+  ],
+  "tags": [
+    { "name": "Auth", "description": "Xác thực & Quản lý tài khoản" },
+    { "name": "Products", "description": "Quản lý sản phẩm & upload hình ảnh" },
+    { "name": "Categories", "description": "Danh mục sản phẩm" },
+    { "name": "Product Variants", "description": "Biến thể sản phẩm (Màu sắc, cấu hình)" },
+    { "name": "Orders", "description": "Quản lý đơn hàng & thanh toán PayOS" },
+    { "name": "Cart", "description": "Giỏ hàng của người dùng" },
+    { "name": "Promotions", "description": "Banner quảng cáo & khuyến mãi" },
+    { "name": "Vouchers", "description": "Mã giảm giá" },
+    { "name": "Reviews", "description": "Đánh giá sản phẩm" },
+    { "name": "Favorites", "description": "Sản phẩm yêu thích" },
+    { "name": "Addresses", "description": "Sổ địa chỉ giao hàng" },
+    { "name": "Notifications", "description": "Thông báo đơn hàng & hệ thống" },
+    { "name": "System", "description": "Kiểm tra tình trạng máy chủ (Health Check)" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Kiểm tra tình trạng máy chủ",
+        "responses": {
+          "200": {
+            "description": "Máy chủ hoạt động bình thường",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean", "example": true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "Lấy danh sách tất cả sản phẩm",
+        "responses": {
+          "200": {
+            "description": "Danh sách sản phẩm kèm danh mục",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Product" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Products"],
+        "summary": "Tạo sản phẩm mới",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ProductInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo sản phẩm thành công",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Product" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "Xem chi tiết một sản phẩm",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Thông tin sản phẩm", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Product" } } } },
+          "404": { "description": "Không tìm thấy sản phẩm" }
+        }
+      },
+      "put": {
+        "tags": ["Products"],
+        "summary": "Cập nhật thông tin sản phẩm",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ProductInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Cập nhật thành công" }
+        }
+      },
+      "delete": {
+        "tags": ["Products"],
+        "summary": "Xóa sản phẩm",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Xóa thành công" }
+        }
+      }
+    },
+    "/categories": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "Lấy danh sách danh mục",
+        "responses": {
+          "200": {
+            "description": "Danh sách danh mục",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Category" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Categories"],
+        "summary": "Tạo danh mục mới",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["CategoryName"],
+                "properties": {
+                  "CategoryName": { "type": "string", "example": "Laptop Gaming" },
+                  "ImageUrl": { "type": "string", "example": "https://example.com/laptop.jpg" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Tạo thành công" }
+        }
+      }
+    },
+    "/promotions": {
+      "get": {
+        "tags": ["Promotions"],
+        "summary": "Lấy danh sách banner khuyến mãi",
+        "responses": {
+          "200": { "description": "Danh sách banner khuyến mãi" }
+        }
+      }
+    },
+    "/vouchers": {
+      "get": {
+        "tags": ["Vouchers"],
+        "summary": "Lấy danh sách mã giảm giá",
+        "responses": {
+          "200": { "description": "Danh sách voucher" }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "Lấy danh sách tất cả đơn hàng (Admin)",
+        "responses": {
+          "200": { "description": "Danh sách đơn hàng kèm chi tiết" }
+        }
+      },
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Tạo đơn hàng mới (Checkout)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["UserID", "RecipientName", "RecipientPhone", "ShippingAddress", "TotalAmount", "PaymentMethod", "Items"],
+                "properties": {
+                  "UserID": { "type": "integer", "example": 4 },
+                  "RecipientName": { "type": "string", "example": "Nguyễn Văn A" },
+                  "RecipientPhone": { "type": "string", "example": "0909123456" },
+                  "ShippingAddress": { "type": "string", "example": "123 Nguyễn Huệ, Quận 1, TPHCM" },
+                  "TotalAmount": { "type": "number", "example": 18990000 },
+                  "PaymentMethod": { "type": "string", "enum": ["COD", "PayOS"], "example": "PayOS" },
+                  "Items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ProductID": { "type": "integer", "example": 1 },
+                        "Quantity": { "type": "integer", "example": 1 },
+                        "Price": { "type": "number", "example": 18990000 }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Đặt hàng thành công" }
+        }
+      }
+    },
+    "/orders/{id}/payos-payment": {
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Tạo liên kết & mã QR thanh toán VietQR PayOS",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "UserID": { "type": "integer", "example": 4 } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo mã thanh toán thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orderId": { "type": "integer" },
+                    "paymentStatus": { "type": "string", "example": "PENDING" },
+                    "checkoutUrl": { "type": "string" },
+                    "qrCode": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/payos/webhook": {
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Webhook nhận thông báo thanh toán tự động từ PayOS",
+        "responses": {
+          "200": { "description": "Xác nhận Webhook thành công" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Đăng nhập bằng số điện thoại và mật khẩu",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phone", "password"],
+                "properties": {
+                  "phone": { "type": "string", "example": "0909680426" },
+                  "password": { "type": "string", "example": "123456" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Đăng nhập thành công" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Đăng ký tài khoản người dùng mới",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phone", "password", "otp"],
+                "properties": {
+                  "phone": { "type": "string", "example": "0909680426" },
+                  "password": { "type": "string", "example": "123456" },
+                  "otp": { "type": "string", "example": "123456" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Đăng ký thành công" }
+        }
+      }
+    },
+    "/cart/{userId}": {
+      "get": {
+        "tags": ["Cart"],
+        "summary": "Lấy danh sách giỏ hàng theo UserID",
+        "parameters": [
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Danh sách sản phẩm trong giỏ hàng" }
+        }
+      }
+    },
+    "/favorites/{userId}": {
+      "get": {
+        "tags": ["Favorites"],
+        "summary": "Lấy danh sách sản phẩm yêu thích của người dùng",
+        "parameters": [
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Danh sách sản phẩm yêu thích" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "properties": {
+          "ProductID": { "type": "integer", "example": 1 },
+          "ProductName": { "type": "string", "example": "Laptop HP Gaming VICTUS 15" },
+          "Description": { "type": "string", "example": "Core i5 13420H, 16GB, 512GB SSD, RTX 3050" },
+          "Price": { "type": "number", "example": 22490000 },
+          "DiscountPrice": { "type": "number", "example": 18990000 },
+          "StockQuantity": { "type": "integer", "example": 50 },
+          "ImageUrl": { "type": "string", "example": "https://example.com/hp-victus.jpg" },
+          "CategoryID": { "type": "integer", "example": 1 },
+          "CPU": { "type": "string", "example": "Intel Core i5-13420H" },
+          "RAM": { "type": "string", "example": "16GB DDR5" },
+          "Storage": { "type": "string", "example": "512GB SSD NVMe" },
+          "Display": { "type": "string", "example": "15.6 inch FHD 144Hz" },
+          "Series": { "type": "string", "example": "HP VICTUS" }
+        }
+      },
+      "ProductInput": {
+        "type": "object",
+        "required": ["ProductName", "Price"],
+        "properties": {
+          "ProductName": { "type": "string", "example": "Laptop MSI Cyborg 15" },
+          "Description": { "type": "string", "example": "Gaming Laptop Intel Core i7 RTX 4060" },
+          "Price": { "type": "number", "example": 25990000 },
+          "DiscountPrice": { "type": "number", "example": 23490000 },
+          "StockQuantity": { "type": "integer", "example": 20 },
+          "ImageUrl": { "type": "string", "example": "https://example.com/msi.jpg" },
+          "CategoryID": { "type": "integer", "example": 1 },
+          "CPU": { "type": "string", "example": "Intel Core i7" },
+          "RAM": { "type": "string", "example": "16GB" },
+          "Storage": { "type": "string", "example": "512GB SSD" },
+          "Display": { "type": "string", "example": "15.6 inch FHD" },
+          "Series": { "type": "string", "example": "MSI Cyborg" }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "CategoryID": { "type": "integer", "example": 1 },
+          "CategoryName": { "type": "string", "example": "Laptop" },
+          "ImageUrl": { "type": "string", "example": "https://example.com/laptop-category.jpg" }
+        }
+      }
+    }
+  }
+}

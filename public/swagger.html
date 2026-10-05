@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MANB Store - Swagger API Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { margin: 0; padding: 0; background: #fafafa; font-family: sans-serif; }
+    .topbar-nav {
+      background: #0f172a;
+      color: #fff;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #3b82f6;
+    }
+    .topbar-nav .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    .topbar-nav a {
+      color: #93c5fd;
+      text-decoration: none;
+      font-size: 14px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      background: #1e293b;
+      transition: all 0.2s;
+    }
+    .topbar-nav a:hover {
+      background: #2563eb;
+      color: #fff;
+    }
+    .swagger-ui .topbar { display: none; }
+  </style>
+</head>
+<body>
+  <div class="topbar-nav">
+    <div class="brand">
+      <i class="fa-solid fa-bolt text-amber-400"></i> MANB Computer Store - Swagger UI API Documentation
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <a href="/api/"><i class="fa-solid fa-database mr-1"></i> Database Console</a>
+      <a href="/" target="_blank"><i class="fa-solid fa-store mr-1"></i> Trang Mua Hàng</a>
+    </div>
+  </div>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      const swaggerJsonUrl = window.location.pathname.startsWith('/api') ? '/api/swagger.json' : '/swagger.json';
+      SwaggerUIBundle({
+        url: swaggerJsonUrl,
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        layout: "BaseLayout"
+      });
+    };
+  </script>
+</body>
+</html>
