@@ -19,9 +19,6 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(uploadDir));
-
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadDir);
@@ -59,6 +56,33 @@ const apiOverview = {
   ]
 };
 
+const basicAuth = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="MANB Admin Console & Swagger Docs"');
+    return res.status(401).send('Authentication required: Vui lòng đăng nhập để truy cập Admin Console và Swagger API.');
+  }
+
+  try {
+    const base64Credentials = authHeader.split(' ')[1];
+    const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+    const [username, ...passwordParts] = credentials.split(':');
+    const password = passwordParts.join(':');
+
+    const adminUser = process.env.ADMIN_CONSOLE_USER || 'admin';
+    const adminPass = process.env.ADMIN_CONSOLE_PASS || 'AdminPassword2026!';
+
+    if (username === adminUser && password === adminPass) {
+      return next();
+    }
+  } catch (e) {
+    // Ignore error
+  }
+
+  res.setHeader('WWW-Authenticate', 'Basic realm="MANB Admin Console & Swagger Docs"');
+  return res.status(401).send('Tài khoản hoặc mật khẩu không chính xác.');
+};
+
 const handleApiRoot = (req, res) => {
   if (req.accepts('html')) {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
@@ -67,14 +91,18 @@ const handleApiRoot = (req, res) => {
   }
 };
 
-app.get(['/', '/api', '/api/'], handleApiRoot);
-app.get(['/api/docs', '/api/swagger', '/docs', '/swagger'], (_req, res) => {
+// Protected routes (Admin Database Console & Swagger Docs)
+app.get(['/', '/api', '/api/', '/admin.html'], basicAuth, handleApiRoot);
+app.get(['/api/docs', '/api/swagger', '/docs', '/swagger', '/swagger.html', '/api/swagger.html'], basicAuth, (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'swagger.html'));
 });
-app.get(['/api/swagger.json', '/swagger.json'], (_req, res) => {
+app.get(['/api/swagger.json', '/swagger.json'], basicAuth, (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'swagger.json'));
 });
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(uploadDir));
 const routes = [
   ['/api/categories', './src/routes/categoryRoutes'],
   ['/api/products', './src/routes/productRoutes'],
