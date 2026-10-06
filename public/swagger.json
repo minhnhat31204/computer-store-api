@@ -200,6 +200,95 @@
         "responses": {
           "200": { "description": "Danh sách voucher" }
         }
+      },
+      "post": {
+        "tags": ["Vouchers"],
+        "summary": "Tạo mới mã giảm giá (Admin)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["Code", "Name", "DiscountPercentage"],
+                "properties": {
+                  "Code": { "type": "string", "example": "SALE20" },
+                  "Name": { "type": "string", "example": "Giảm giá mùa hè 20%" },
+                  "DiscountPercentage": { "type": "number", "example": 20 },
+                  "MaxDiscountAmount": { "type": "number", "example": 200000 },
+                  "ExpiryDate": { "type": "string", "format": "date", "example": "2026-12-31" },
+                  "IsActive": { "type": "boolean", "example": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Tạo mã giảm giá thành công" }
+        }
+      }
+    },
+    "/vouchers/validate": {
+      "post": {
+        "tags": ["Vouchers"],
+        "summary": "Kiểm tra và tính mức giảm cho mã giảm giá (Customer)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code"],
+                "properties": {
+                  "code": { "type": "string", "example": "SALE20" },
+                  "subtotal": { "type": "number", "example": 1000000 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Mã hợp lệ và trả về mức giảm" },
+          "400": { "description": "Mã không hợp lệ hoặc đã hết hạn" }
+        }
+      }
+    },
+    "/vouchers/{id}": {
+      "get": {
+        "tags": ["Vouchers"],
+        "summary": "Chi tiết mã giảm giá",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Thông tin voucher" } }
+      },
+      "put": {
+        "tags": ["Vouchers"],
+        "summary": "Cập nhật mã giảm giá (Admin)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "Code": { "type": "string" },
+                  "Name": { "type": "string" },
+                  "DiscountPercentage": { "type": "number" },
+                  "MaxDiscountAmount": { "type": "number" },
+                  "ExpiryDate": { "type": "string", "format": "date" },
+                  "IsActive": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Cập nhật thành công" } }
+      },
+      "delete": {
+        "tags": ["Vouchers"],
+        "summary": "Xóa mã giảm giá (Admin)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Xóa thành công" } }
       }
     },
     "/orders": {

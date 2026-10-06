@@ -228,7 +228,7 @@ exports.getByUserId = async (req, res) => {
 // 3. Tạo Đơn hàng kèm theo danh sách OrderItems và Tự động xóa giỏ hàng
 exports.create = async (req, res) => {
   try {
-    const { UserID, TotalAmount, PaymentMethod, Items, RecipientName, RecipientPhone, ShippingAddress, Note, VoucherID } = req.body;
+    const { UserID, TotalAmount, PaymentMethod, Items, RecipientName, RecipientPhone, ShippingAddress, Note, VoucherID, VoucherCode } = req.body;
 
     if (!Array.isArray(Items) || Items.length === 0) {
       return res.status(400).json({ error: 'Đơn hàng cần có ít nhất một sản phẩm.' });
@@ -244,13 +244,38 @@ exports.create = async (req, res) => {
 
     let discountAmount = 0;
     let voucherCode = null;
-    if (VoucherID) {
-      const voucher = await Voucher.findByPk(Number(VoucherID));
-      const expiresAt = voucher?.ExpiryDate ? new Date(voucher.ExpiryDate) : null;
-      if (expiresAt) expiresAt.setHours(23, 59, 59, 999);
-      if (!voucher || !voucher.IsActive || (expiresAt && expiresAt < new Date())) {
-        return res.status(400).json({ error: 'Voucher không tồn tại, đã hết hạn hoặc đã ngừng áp dụng.' });
+    let resolvedVoucherId = null;
+
+    const voucherIdParam = VoucherID ? Number(VoucherID) : null;
+    const voucherCodeParam = (VoucherCode || req.body.voucherCode) ? String(VoucherCode || req.body.voucherCode).trim() : null;
+
+    if (voucherIdParam || voucherCodeParam) {
+      let voucher = null;
+      if (voucherIdParam) {
+        voucher = await Voucher.findByPk(voucherIdParam);
+      } else if (voucherCodeParam) {
+        voucher = await Voucher.findOne({
+          where: sequelize.where(
+            sequelize.fn('LOWER', sequelize.col('Code')),
+            voucherCodeParam.toLowerCase()
+          )
+        });
       }
+
+      if (!voucher || voucher.IsActive === false) {
+        return res.status(400).json({ error: 'Mã giảm giá không tồn tại hoặc đã ngừng áp dụng.' });
+      }
+
+      if (voucher.ExpiryDate) {
+        const expiresAt = new Date(voucher.ExpiryDate);
+        if (!Number.isNaN(expiresAt.getTime())) {
+          expiresAt.setHours(23, 59, 59, 999);
+          if (expiresAt < new Date()) {
+            return res.status(400).json({ error: 'Mã giảm giá đã hết hạn sử dụng.' });
+          }
+        }
+      }
+
       const subtotal = (Array.isArray(Items) ? Items : []).reduce((sum, item) => {
         const unitPrice = Number(item.UnitPrice ?? item.Price ?? item.price ?? 0);
         const quantity = Number(item.Quantity ?? item.quantity ?? 1);
@@ -258,8 +283,9 @@ exports.create = async (req, res) => {
       }, 0);
       const percentageDiscount = subtotal * Math.max(0, Number(voucher.DiscountPercentage) || 0) / 100;
       const cap = Number(voucher.MaxDiscountAmount);
-      discountAmount = Math.min(subtotal, percentageDiscount, Number.isFinite(cap) && cap > 0 ? cap : percentageDiscount);
+      discountAmount = Math.round(Math.min(subtotal, Number.isFinite(cap) && cap > 0 ? Math.min(percentageDiscount, cap) : percentageDiscount));
       voucherCode = voucher.Code;
+      resolvedVoucherId = voucher.VoucherID;
     }
 
     const newOrder = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
@@ -293,7 +319,7 @@ exports.create = async (req, res) => {
         Note,
         DiscountAmount: discountAmount,
         VoucherCode: voucherCode ? String(voucherCode).trim().slice(0, 50) : null,
-        VoucherID: VoucherID ? Number(VoucherID) : null
+        VoucherID: resolvedVoucherId || null
       }, { transaction });
       await OrderStatusHistory.create({ OrderID: order.OrderID, NewStatus: 'Pending', Note: 'Đơn hàng được tạo' }, { transaction });
       await OrderItem.bulkCreate(orderItemsData.map((item) => ({ ...item, OrderID: order.OrderID })), { transaction });

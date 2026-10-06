@@ -12,7 +12,10 @@ const Voucher = sequelize.define('Voucher', {
     type: DataTypes.DATE,
     get() {
       const rawValue = this.getDataValue('ExpiryDate');
-      return rawValue ? rawValue.toISOString().split('T')[0] : null;
+      if (!rawValue) return null;
+      if (typeof rawValue === 'string') return rawValue.split('T')[0];
+      if (rawValue instanceof Date) return rawValue.toISOString().split('T')[0];
+      return String(rawValue).split('T')[0];
     }
   },
   IsActive: { type: DataTypes.BOOLEAN, defaultValue: true }
