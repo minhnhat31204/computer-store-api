@@ -37,13 +37,16 @@ async function createOrderNotification({ userId, orderId, eventKey, type, title,
 
 async function notifyOrderCreated(order) {
   const id = Number(order.OrderID);
+  const isCod = String(order.PaymentMethod || '').trim().toUpperCase() === 'COD';
   await createOrderNotification({
     userId: order.UserID,
     orderId: id,
     eventKey: `order:${id}:created`,
     type: 'ORDER_CREATED',
-    title: 'Đã tiếp nhận đơn hàng',
-    message: `Đơn hàng #${id} đã được tạo và đang chờ cửa hàng xác nhận.`,
+    title: isCod ? 'Đã tiếp nhận đơn hàng (COD)' : 'Đã tiếp nhận đơn hàng',
+    message: isCod
+      ? `Đơn hàng #${id} đã được tạo với phương thức thanh toán khi nhận hàng (COD) và đang chờ thanh toán.`
+      : `Đơn hàng #${id} đã được tạo và đang chờ xác nhận / thanh toán.`,
   });
 }
 

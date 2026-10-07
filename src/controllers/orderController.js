@@ -310,7 +310,7 @@ exports.create = async (req, res) => {
       const order = await Order.create({
         UserID,
         TotalAmount,
-        PaymentMethod: PaymentMethod || 'VNPAY-QR',
+        PaymentMethod: PaymentMethod || 'COD',
         Status: 'Pending',
         InventoryReserved: true,
         RecipientName,
@@ -321,7 +321,11 @@ exports.create = async (req, res) => {
         VoucherCode: voucherCode ? String(voucherCode).trim().slice(0, 50) : null,
         VoucherID: resolvedVoucherId || null
       }, { transaction });
-      await OrderStatusHistory.create({ OrderID: order.OrderID, NewStatus: 'Pending', Note: 'Đơn hàng được tạo' }, { transaction });
+      await OrderStatusHistory.create({
+        OrderID: order.OrderID,
+        NewStatus: 'Pending',
+        Note: PaymentMethod === 'COD' ? 'Đơn hàng COD - Chờ thanh toán khi nhận hàng' : 'Đơn hàng được tạo'
+      }, { transaction });
       await OrderItem.bulkCreate(orderItemsData.map((item) => ({ ...item, OrderID: order.OrderID })), { transaction });
       if (UserID) await CartItemDB.destroy({ where: { UserID }, transaction });
       return order;
