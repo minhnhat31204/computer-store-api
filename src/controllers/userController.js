@@ -1,4 +1,4 @@
-const { User } = require('../models');
+const { User, CartItemDB, Favorite, Notification, AddressBookEntry, Review, Order, SupportConversation } = require('../models');
 const { hashPassword, verifyPassword } = require('../services/authSecurity');
 
 exports.getAll = async (req, res) => {
@@ -115,8 +115,23 @@ exports.updateRole = async (req, res) => {
 
 exports.delete = async (req, res) => {
   try {
-    await User.destroy({ where: { UserID: req.params.id } });
-    res.status(200).json({ message: 'Deleted successfully' });
+    const userId = req.params.id;
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
+    }
+
+    // Xóa/gỡ bỏ liên kết các bản ghi phụ thuộc tránh lỗi ràng buộc khóa ngoại (Foreign Key)
+    if (CartItemDB) await CartItemDB.destroy({ where: { UserID: userId } }).catch(() => {});
+    if (Favorite) await Favorite.destroy({ where: { UserID: userId } }).catch(() => {});
+    if (Notification) await Notification.destroy({ where: { UserID: userId } }).catch(() => {});
+    if (AddressBookEntry) await AddressBookEntry.destroy({ where: { UserID: userId } }).catch(() => {});
+    if (Review) await Review.destroy({ where: { UserID: userId } }).catch(() => {});
+    if (Order) await Order.update({ UserID: null }, { where: { UserID: userId } }).catch(() => {});
+    if (SupportConversation) await SupportConversation.update({ UserID: null }, { where: { UserID: userId } }).catch(() => {});
+
+    await user.destroy();
+    res.status(200).json({ message: 'Xóa tài khoản thành công.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

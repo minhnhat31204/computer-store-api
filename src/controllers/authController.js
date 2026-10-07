@@ -4,6 +4,7 @@ const {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
   getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
   hashPassword, verifyPassword, DEFAULT_PHONE_OTP,
+  getLoginLockStatus, recordFailedLogin, clearLoginAttempts,
 } = require('../services/authSecurity');
 
 function sendError(res, error, fallback) {
@@ -81,14 +82,63 @@ exports.login = async (req, res) => {
     const identifier = String(req.body.phone || req.body.email || '').trim();
     const password = String(req.body.password || '');
     if (!identifier || !password) return res.status(400).json({ error: 'Vui lòng nhập số điện thoại và mật khẩu.' });
+
+    let lockKey = identifier.toLowerCase();
+    if (!identifier.includes('@')) {
+      try { lockKey = normalizePhone(identifier); } catch { /* keep raw identifier */ }
+    }
+
+    const lockStatus = getLoginLockStatus(lockKey);
+    if (lockStatus.isLocked) {
+      return res.status(429).json({
+        error: `Tài khoản tạm thời bị khóa do đăng nhập sai 5 lần. Vui lòng thử lại sau ${lockStatus.remainingSeconds} giây.`,
+        locked: true,
+        retryAfter: lockStatus.remainingSeconds,
+      });
+    }
+
     const isEmail = identifier.includes('@');
     const conditions = isEmail
       ? [{ Email: identifier.toLowerCase() }]
       : [{ Phone: { [Op.in]: phoneLookupValues(identifier) } }];
     const user = await User.findOne({ where: { [Op.or]: conditions } });
-    if (!user) return res.status(401).json({ error: 'Số điện thoại không tồn tại hoặc mật khẩu không đúng.' });
+
+    if (!user) {
+      const failure = recordFailedLogin(lockKey);
+      if (failure.isLocked) {
+        return res.status(429).json({
+          error: `Bạn đã đăng nhập sai 5 lần. Tài khoản tạm thời bị khóa trong 10 giây. Vui lòng thử lại sau ${failure.remainingSeconds} giây.`,
+          locked: true,
+          retryAfter: failure.remainingSeconds,
+        });
+      }
+      return res.status(401).json({
+        error: `Số điện thoại hoặc mật khẩu không đúng. (Sai ${failure.attempts}/5 lần)`,
+        attempts: failure.attempts,
+        remainingAttempts: failure.remainingAttempts,
+      });
+    }
+
     const result = await verifyPassword(password, user.PasswordHash);
-    if (!result.valid) return res.status(401).json({ error: 'Số điện thoại không tồn tại hoặc mật khẩu không đúng.' });
+    if (!result.valid) {
+      const failure = recordFailedLogin(lockKey);
+      if (failure.isLocked) {
+        return res.status(429).json({
+          error: `Bạn đã đăng nhập sai 5 lần. Tài khoản tạm thời bị khóa trong 10 giây. Vui lòng thử lại sau ${failure.remainingSeconds} giây.`,
+          locked: true,
+          retryAfter: failure.remainingSeconds,
+        });
+      }
+      return res.status(401).json({
+        error: `Số điện thoại hoặc mật khẩu không đúng. (Sai ${failure.attempts}/5 lần)`,
+        attempts: failure.attempts,
+        remainingAttempts: failure.remainingAttempts,
+      });
+    }
+
+    // Success -> clear failed login attempts
+    clearLoginAttempts(lockKey);
+
     if (result.needsUpgrade) {
       user.PasswordHash = await hashPassword(password);
       await user.save();

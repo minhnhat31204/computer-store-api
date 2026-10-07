@@ -179,10 +179,48 @@ async function verifyPassword(password, stored) {
   }
 }
 
+const loginAttempts = new Map();
+const LOCKOUT_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 10 * 1000; // 10s
+
+function getLoginLockStatus(identifier) {
+  const key = String(identifier || '').trim().toLowerCase();
+  const record = loginAttempts.get(key);
+  if (!record) return { isLocked: false, remainingSeconds: 0, attempts: 0 };
+
+  const now = Date.now();
+  if (record.lockedUntil && now < record.lockedUntil) {
+    const remainingSeconds = Math.ceil((record.lockedUntil - now) / 1000);
+    return { isLocked: true, remainingSeconds, attempts: record.attempts };
+  }
+  return { isLocked: false, remainingSeconds: 0, attempts: record.attempts };
+}
+
+function recordFailedLogin(identifier) {
+  const key = String(identifier || '').trim().toLowerCase();
+  const now = Date.now();
+  const record = loginAttempts.get(key) || { attempts: 0, lockedUntil: 0 };
+
+  record.attempts = (record.attempts || 0) + 1;
+  if (record.attempts >= LOCKOUT_ATTEMPTS) {
+    record.lockedUntil = now + LOCKOUT_DURATION_MS;
+    loginAttempts.set(key, record);
+    return { isLocked: true, remainingSeconds: 10, attempts: record.attempts };
+  }
+  loginAttempts.set(key, record);
+  return { isLocked: false, remainingSeconds: 0, attempts: record.attempts, remainingAttempts: LOCKOUT_ATTEMPTS - record.attempts };
+}
+
+function clearLoginAttempts(identifier) {
+  const key = String(identifier || '').trim().toLowerCase();
+  loginAttempts.delete(key);
+}
+
 module.exports = {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
   getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
   hashPassword, verifyPassword, DEFAULT_PHONE_OTP,
+  getLoginLockStatus, recordFailedLogin, clearLoginAttempts,
 };
 
 
