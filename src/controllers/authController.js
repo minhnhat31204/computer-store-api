@@ -86,9 +86,9 @@ exports.login = async (req, res) => {
       ? [{ Email: identifier.toLowerCase() }]
       : [{ Phone: { [Op.in]: phoneLookupValues(identifier) } }];
     const user = await User.findOne({ where: { [Op.or]: conditions } });
-    if (!user) return res.status(401).json({ error: 'Số điện thoại hoặc mật khẩu không đúng.' });
+    if (!user) return res.status(401).json({ error: 'Số điện thoại không tồn tại hoặc mật khẩu không đúng.' });
     const result = await verifyPassword(password, user.PasswordHash);
-    if (!result.valid) return res.status(401).json({ error: 'Số điện thoại hoặc mật khẩu không đúng.' });
+    if (!result.valid) return res.status(401).json({ error: 'Số điện thoại không tồn tại hoặc mật khẩu không đúng.' });
     if (result.needsUpgrade) {
       user.PasswordHash = await hashPassword(password);
       await user.save();
