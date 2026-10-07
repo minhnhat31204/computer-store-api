@@ -68,8 +68,6 @@ exports.register = async (req, res) => {
 exports.sendRegistrationOtp = async (req, res) => {
   try {
     const phone = normalizePhone(req.body.phone);
-    const existing = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(phone) } } });
-    if (existing) return res.status(409).json({ error: 'Số điện thoại đã được đăng ký.' });
     issueChallenge(`register:phone:${phone}`, DEFAULT_PHONE_OTP);
     return res.json({ message: `OTP đã sẵn sàng. Mã xác thực là ${DEFAULT_PHONE_OTP}.` });
   } catch (error) {
