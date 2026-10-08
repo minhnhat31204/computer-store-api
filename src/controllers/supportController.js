@@ -71,9 +71,9 @@ function normalize(value) {
 
 function extractBudget(context) {
   const normalized = normalize(context);
-  const compactAmount = normalized.match(/(?:duoi|toi da|khong qua|ngan sach|tam|khoang|tam khoang|gia)?\s*(\d+(?:[.,]\d+)?)\s*(trieu|tr|m|cu)\b/);
+  const compactAmount = normalized.match(/(?:duoi|toi da|khong qua|ngan sach|tam|khoang|tam khoang|gia|tam gia)?\s*(\d+(?:[.,]\d+)?)\s*(trieu|tr|m|cu)\b/);
   if (compactAmount) return Math.round(Number(compactAmount[1].replace(',', '.')) * 1_000_000);
-  const vndAmount = normalized.match(/(?:duoi|toi da|khong qua|ngan sach|tam|khoang|tam khoang|gia)?\s*(\d{1,3}(?:[.,]\d{3}){2,})\s*(?:vnd|dong|d)?\b/);
+  const vndAmount = normalized.match(/(?:duoi|toi da|khong qua|ngan sach|tam|khoang|tam khoang|gia|tam gia)?\s*(\d{1,3}(?:[.,]\d{3}){2,})\s*(?:vnd|dong|d)?\b/);
   if (vndAmount) return Number(vndAmount[1].replace(/[.,]/g, ''));
   return null;
 }
@@ -97,12 +97,46 @@ function productSearchText(product) {
   ].join(' '));
 }
 
+// Bộ từ dừng tiếng Việt (Stopwords) để tránh khớp sai vào các từ giao tiếp hàng ngày
+const VIETNAMESE_STOP_WORDS = new Set([
+  'cho', 'toi', 'minh', 'ban', 'co', 'khong', 'ko', 'nao', 'gia', 'bao', 'nhieu',
+  'may', 'hang', 'san', 'pham', 'loai', 'con', 'tu', 'duoi', 'tren', 'voi', 'va',
+  'la', 'cua', 'the', 'nhe', 'ad', 'shop', 'ben', 'manb', 'muon', 'can', 'dang',
+  'mot', 'cac', 'gi', 'thi', 'ai', 'may', 'em', 'anh', 'chi', 'duoc', 'vay', 'nha',
+  'a', 'da', 'oi', 'xem', 'tim', 'hoi', 'tien', 'mua', 'ban', 'hoi', 'nhi', 'ha'
+]);
+
 // Trợ lý chuyên gia tư vấn máy tính thông minh (Smart Vietnamese Consultation Engine)
 function buildSmartAdvice(question, products, history = []) {
   const norm = normalize(question);
   const budget = extractBudget(question);
 
-  // 1. Phản hồi chào hỏi thân thiện
+  // 1. Nhận diện câu hỏi danh tính: "bạn là gì", "bạn là ai", "mày là ai", "ai đây"
+  if (/(ban la ai|ban la gi|may la ai|may la gi|em la ai|em la gi|who are you|ban ten gi|gioi thieu|la ai day|la gi day)/.test(norm)) {
+    return 'Dạ em là **Trợ lý AI của MANB SHOP** (manb.vn)! 🤖✨\n\n' +
+      'Nhiệm vụ của em là hỗ trợ quý khách:\n' +
+      '• 🔍 Tìm kiếm và tư vấn laptop phù hợp nhất theo ngân sách và công việc (Học tập, Gaming, Đồ họa, Lập trình...).\n' +
+      '• 📊 So sánh cấu hình, chip CPU, RAM, card đồ họa và kiểm tra tồn kho trực tiếp.\n' +
+      '• 🚚 Giải đáp chính sách bảo hành, vận chuyển, đổi trả và hình thức thanh toán tại cửa hàng.\n\n' +
+      'Anh/chị đang quan tâm đến dòng máy nào để em hỗ trợ tư vấn ngay ạ?';
+  }
+
+  // 2. Nhận diện các mặt hàng không thuộc danh mục kinh doanh của cửa hàng (bàn, ghế, điện thoại, quần áo, xe máy...)
+  const nonCatalogItems = [
+    { pattern: /\b(ban hoc|ban gaming|ban lam viec|ban|cai ban)\b/, name: 'bàn học / bàn gaming' },
+    { pattern: /\b(ghe gaming|ghe|ghe xoay|ghe cong thai hoc)\b/, name: 'ghế gaming / ghế văn phòng' },
+    { pattern: /\b(dien thoai|iphone|samsung galaxy|smartphone)\b/, name: 'điện thoại thông minh' },
+    { pattern: /\b(xe may|xe|oto|nha|quan ao|giay|thuc an|do an|nuoc uong|tivi|tu lanh|may giat)\b/, name: 'mặt hàng này' },
+  ];
+  for (const item of nonCatalogItems) {
+    // Chỉ kích hoạt nếu không chứa từ khóa laptop/máy tính
+    if (item.pattern.test(norm) && !/(laptop|may tinh|pc|macbook|ram|cpu|ssd|card)/.test(norm)) {
+      return `Dạ hiện tại **MANB SHOP chỉ chuyên kinh doanh các dòng Laptop, Máy tính và linh kiện công nghệ chính hãng**, cửa hàng chưa kinh doanh ${item.name} ạ! 😊\n\n` +
+        'Nếu anh/chị cần tư vấn các dòng **Laptop Gaming, Laptop Sinh viên / Văn phòng, MacBook hoặc Máy trạm đồ họa**, em luôn sẵn sàng hỗ trợ nhiệt tình ạ!';
+    }
+  }
+
+  // 3. Phản hồi chào hỏi thân thiện
   const isGreeting = /^(chao|xin chao|hello|hi|alo|shop oi|ad oi|co ai khong|admin oi)\b/.test(norm);
   if (isGreeting && norm.length < 25) {
     return 'Dạ MANB SHOP xin chào quý khách! 👋\n\nEm là trợ lý AI chuyên tư vấn laptop & máy tính. Em có thể hỗ trợ anh/chị chọn máy theo:\n' +
@@ -113,7 +147,28 @@ function buildSmartAdvice(question, products, history = []) {
       'Anh/chị đang tìm máy tầm giá khoảng bao nhiêu hoặc dùng cho công việc gì để em tư vấn mẫu phù hợp nhất ạ?';
   }
 
-  // 2. Câu hỏi về chính sách cửa hàng
+  // 4. Lời cảm ơn hoặc khen ngợi
+  if (/(cam on|thank|thanks|gioi qua|hay qua|tuyet voi|good|ok shop|duoc day)/.test(norm)) {
+    return 'Dạ không có gì ạ! Rất vui vì được hỗ trợ anh/chị. Nếu cần thêm bất kỳ thông tin nào hoặc muốn đặt hàng nhanh, anh/chị cứ nhắn em nhé! Chúc anh/chị một ngày thật vui vẻ! 😊';
+  }
+
+  // 5. Khi khách hàng phản hồi chưa hài lòng / chê
+  if (/(ngu|tam bay|vo van|chan|do qua|sai roi|khong dung)/.test(norm)) {
+    return 'Dạ em thành thật xin lỗi vì đã phản hồi chưa được chuẩn xác với mong muốn của anh/chị. 🙏\n\n' +
+      'Anh/chị có thể cho em xin rõ nhu cầu (ví dụ: *Cần laptop chơi Valorant tầm 18 triệu* hoặc *Cần MacBook mỏng nhẹ*) để em lọc chính xác, hoặc bấm nút **"Nhắn CSKH"** để nhân viên hỗ trợ trực tiếp cho mình ngay nhé!';
+  }
+
+  // 6. Câu hỏi về địa chỉ cửa hàng, showroom, liên hệ
+  if (/(dia chi|o dau|showroom|cua hang|chi nhanh|hotline|so dien thoai|sdt|lien he)/.test(norm)) {
+    return 'Dạ thông tin liên hệ và hệ thống Showroom của MANB SHOP:\n' +
+      '• 📍 **Showroom TP.HCM**: 123 Đường Sư Vạn Hạnh, Quận 10, TP. Hồ Chí Minh\n' +
+      '• 📍 **Showroom Hà Nội**: 456 Đường Cầu Giấy, Quận Cầu Giấy, Hà Nội\n' +
+      '• ⏰ **Giờ mở cửa**: 08:00 – 21:30 (tất cả các ngày trong tuần)\n' +
+      '• 📞 **Hotline / Zalo hỗ trợ**: 0909 680 426\n' +
+      '• 🌐 **Website**: https://manb.vn';
+  }
+
+  // 7. Câu hỏi về chính sách bảo hành, giao hàng, thanh toán
   if (/(bao hanh|doi tra|loi)/.test(norm)) {
     return 'Dạ về chính sách bảo hành tại MANB SHOP:\n' +
       '• Toàn bộ sản phẩm được bảo hành chính hãng từ 12 đến 24 tháng theo tiêu chuẩn nhà sản xuất.\n' +
@@ -137,53 +192,74 @@ function buildSmartAdvice(question, products, history = []) {
       '• Trả góp 0% lãi suất qua thẻ tín dụng hoặc các đối tác tài chính uy tín.';
   }
 
-  // 3. Phân tích tác vụ & nhu cầu chi tiết
+  // 8. Phân tích chi tiết nhu cầu công việc / game / thương hiệu
   const isGaming = /(game|gaming|fps|valorant|lol|lien minh|fo4|fifa|gta|wukong|genshin|cs2|pubg|dota|steam)/.test(norm);
   const isCoding = /(lap trinh|code|cntt|developer|dev|java|python|c\+\+|docker|visual studio|vscode|it)/.test(norm);
   const isGraphic = /(do hoa|photoshop|illustrator|premiere|video|render|autocad|3ds|revit|capcut|canva|chuan mau|srgb)/.test(norm);
   const isOffice = /(van phong|hoc tap|sinh vien|ke toan|word|excel|mong nhe|pin trau|nhe)/.test(norm);
   const isMac = /(macbook|apple|m1|m2|m3|macos)/.test(norm);
+  const isDell = /(dell|inspiron|vostro|xps|latitude)/.test(norm);
+  const isHp = /(hp|victus|omen|pavilion|envy|omnibook)/.test(norm);
+  const isLenovo = /(lenovo|thinkpad|ideapad|legion|loq|yoga)/.test(norm);
+  const isAsus = /(asus|rog|tuf|zenbook|vivobook)/.test(norm);
+  const isAcer = /(acer|nitro|swift|aspire|predator)/.test(norm);
 
-  // 4. Lọc & xếp hạng sản phẩm thông minh từ Database
+  const hasSpecificIntent = isGaming || isCoding || isGraphic || isOffice || isMac || isDell || isHp || isLenovo || isAsus || isAcer || !!budget || /(laptop|may tinh|mua may|tu van|re nhat|tot nhat)/.test(norm);
+
+  // Nếu người dùng chỉ nói câu ngắn không liên quan và không có ý định mua máy tính
+  if (!hasSpecificIntent && norm.split(' ').length <= 4) {
+    return 'Dạ anh/chị cần em hỗ trợ tư vấn dòng laptop nào hay cần giải đáp thông tin gì về sản phẩm tại MANB SHOP không ạ? Em luôn sẵn sàng hỗ trợ nhé! 😊';
+  }
+
+  // 9. Lọc & xếp hạng sản phẩm thông minh từ Database
+  // Lọc bỏ stopwords khi tính điểm từ khóa
+  const meaningfulTokens = norm.split(/[^a-z0-9]+/).filter((t) => t.length > 1 && !VIETNAMESE_STOP_WORDS.has(t));
+
   const scoredProducts = products.map((product) => {
     const text = productSearchText(product);
     const price = currentProductPrice(product);
     const inStock = productStock(product) > 0;
     let score = 0;
 
-    // Khớp từ khóa tìm kiếm trực tiếp
-    const tokens = norm.split(/[^a-z0-9]+/).filter((t) => t.length > 1);
-    tokens.forEach((t) => {
-      if (text.includes(t)) score += 2;
-      if (normalize(product.ProductName).includes(t)) score += 5;
+    // Khớp từ khóa tìm kiếm có ý nghĩa
+    meaningfulTokens.forEach((t) => {
+      if (text.includes(t)) score += 3;
+      if (normalize(product.ProductName).includes(t)) score += 6;
     });
 
     // Điểm theo nhu cầu
     if (isGaming) {
-      if (/gaming|rog|tuf|nitro|legion|victus|loq|rtx|gtx|144hz|165hz/i.test(text)) score += 8;
-      if (/rtx\s*40|rtx\s*30/i.test(text)) score += 5;
+      if (/gaming|rog|tuf|nitro|legion|victus|loq|rtx|gtx|144hz|165hz/i.test(text)) score += 10;
+      if (/rtx\s*40|rtx\s*30/i.test(text)) score += 6;
     }
     if (isCoding) {
-      if (/16gb|32gb|i7|i5|ryzen 7|ryzen 5|512gb|1tb/i.test(text)) score += 6;
+      if (/16gb|32gb|i7|i5|ryzen 7|ryzen 5|512gb|1tb/i.test(text)) score += 8;
     }
     if (isGraphic) {
-      if (/rtx|oled|ips|100% srgb|retina|macbook/i.test(text)) score += 7;
+      if (/rtx|oled|ips|100% srgb|retina|macbook/i.test(text)) score += 8;
     }
     if (isOffice) {
-      if (/zenbook|vivobook|swift|ideapad|envy|gram|macbook|mong nhe/i.test(text)) score += 6;
+      if (/zenbook|vivobook|swift|ideapad|envy|gram|macbook|mong nhe/i.test(text)) score += 8;
     }
-    if (isMac) {
-      if (/macbook|apple|m1|m2|m3/i.test(text)) score += 12;
-    }
+    if (isMac && /macbook|apple|m1|m2|m3/i.test(text)) score += 15;
+    if (isDell && /dell/i.test(text)) score += 12;
+    if (isHp && /hp/i.test(text)) score += 12;
+    if (isLenovo && /lenovo|thinkpad/i.test(text)) score += 12;
+    if (isAsus && /asus/i.test(text)) score += 12;
+    if (isAcer && /acer/i.test(text)) score += 12;
 
     // Điểm theo ngân sách
     if (budget) {
-      if (price <= budget) score += 6;
-      else if (price <= budget * 1.15) score += 2;
-      else score -= 4;
+      if (price <= budget && price >= budget * 0.5) score += 10;
+      else if (price <= budget * 1.15) score += 4;
+      else score -= 8;
+    } else {
+      // Nếu không có ngân sách cụ thể, ưu tiên các dòng laptop phổ thông hợp lý (15 - 35 triệu) thay vì dòng máy 100+ triệu
+      if (price >= 15000000 && price <= 38000000) score += 4;
+      else if (price > 60000000) score -= 6;
     }
 
-    if (inStock) score += 3;
+    if (inStock) score += 5;
 
     return { product, score, price, inStock };
   });
@@ -198,11 +274,11 @@ function buildSmartAdvice(question, products, history = []) {
     return 'Dạ hiện tại danh mục chưa có sản phẩm khớp với yêu cầu này. Anh/chị có thể cho em xin tầm giá hoặc thương hiệu mong muốn để em tra cứu các mẫu tương tự nhé!';
   }
 
-  // 5. Soạn câu tư vấn chuyên gia sắc sảo
+  // 10. Soạn câu tư vấn chuyên gia sắc sảo
   let responseText = '';
   
   if (budget) {
-    responseText += `Dạ với ngân sách khoảng ${budget.toLocaleString('vi-VN')} ₫`;
+    responseText += `Dạ với ngân sách khoảng **${budget.toLocaleString('vi-VN')} ₫**`;
     if (isGaming) responseText += ' để chơi game mượt mà';
     else if (isCoding) responseText += ' cho nhu cầu học lập trình / CNTT';
     else if (isGraphic) responseText += ' cho công việc thiết kế đồ họa / render';
@@ -217,7 +293,7 @@ function buildSmartAdvice(question, products, history = []) {
   } else if (isOffice) {
     responseText += 'Dạ phục vụ học tập và công việc văn phòng (ưu tiên mỏng nhẹ, pin trâu, phím êm), anh/chị tham khảo ngay các mẫu này nhé:\n\n';
   } else {
-    responseText += 'Dạ em đã tìm thấy các mẫu laptop rất phù hợp với nhu cầu của anh/chị tại MANB SHOP:\n\n';
+    responseText += 'Dạ em xin gợi ý các mẫu laptop chất lượng tốt, được nhiều khách hàng ưa chuộng tại MANB SHOP:\n\n';
   }
 
   chosenList.forEach(({ product, price, inStock }, idx) => {
@@ -242,7 +318,7 @@ function buildSmartAdvice(question, products, history = []) {
     } else if (isCoding || /16gb|i7|ryzen 7/i.test(productSearchText(product))) {
       responseText += `   • Đánh giá: Đa nhiệm tốt, mở nhiều tab & chạy mượt VS Code, Docker, Android Studio không lo giật lag.\n`;
     } else {
-      responseText += `   • Đánh giá: Thiết kế hiện đại, hiệu năng ổn định, khởi động máy và mở ứng dụng cực nhanh.\n`;
+      responseText += `   • Đánh giá: Thiết kế sang trọng, hiệu năng ổn định, khởi động máy và mở ứng dụng cực nhanh.\n`;
     }
     responseText += '\n';
   });
@@ -293,15 +369,15 @@ exports.aiReply = async (req, res) => {
 Phong cách: Nhiệt tình, thân thiện, am hiểu kỹ thuật chuyên sâu nhưng diễn đạt dễ hiểu, sử dụng tiếng Việt tự nhiên và xưng hô 'em' - 'anh/chị' hoặc 'quý khách'.
 
 Nhiệm vụ:
-1. Đọc hiểu nhu cầu khách hàng (học tập, lập trình, game, đồ họa, ngân sách, thương hiệu).
-2. Dựa vào DANH SÁCH SẢN PHẨM THỰC TẾ dưới đây của cửa hàng để đưa ra tư vấn:
+1. Đọc hiểu chính xác nhu cầu hoặc câu hỏi của khách hàng.
+2. Nếu khách hỏi thông thường (chào hỏi, bạn là ai, cảm ơn, hỏi bàn/ghế/điện thoại...): Trả lời tự nhiên, lịch sự và giải thích rõ MANB SHOP chỉ chuyên kinh doanh Laptop & Máy tính chính hãng.
+3. Nếu khách cần tìm máy: Dựa vào DANH SÁCH SẢN PHẨM THỰC TẾ dưới đây của cửa hàng để đưa ra tư vấn:
 ${JSON.stringify(relevantProducts.slice(0, 25), null, 2)}
 
 Nguyên tắc:
 - Báo đúng tên máy, giá tiền (VND), cấu hình và tình trạng còn hàng theo dữ liệu trên.
-- Giải thích vì sao cấu hình đó đáp ứng tốt nhu cầu (ví dụ: cần RAM 16GB để code/render, cần RTX để chơi game nặng, màn hình chuẩn màu làm đồ họa).
-- Đưa ra 2 đến 3 gợi ý tốt nhất có gạch đầu dòng rõ ràng, kèm lời khuyên chân thành.
-- Nếu khách hỏi ngoài danh mục hoặc hỏi chính sách: MANB SHOP bảo hành chính hãng 12-24 tháng, 1 đổi 1 30 ngày, freeship toàn quốc, có COD và trả góp.`;
+- Đưa ra 2 đến 3 gợi ý tốt nhất kèm giải thích lý do phù hợp nhu cầu.
+- Thông tin cửa hàng: Bảo hành 12-24 tháng chính hãng, 1 đổi 1 trong 30 ngày, Freeship toàn quốc, COD và trả góp.`;
 
   // 1. Thử gọi Google Gemini API nếu có cấu hình
   const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -313,7 +389,7 @@ Nguyên tắc:
           {
             role: 'user',
             parts: [
-              { text: `${systemPrompt}\n\nLịch sử trò chuyện gần đây:\n${chronologicalHistory.map(m => `${m.SenderRole}: ${m.Message}`).join('\n')}\n\nKhách hàng hỏi: "${latestCustomerMessage.Message}"\nHãy trả lời khách hàng:` }
+              { text: `${systemPrompt}\n\nLịch sử trò chuyện gần đây:\n${chronologicalHistory.map(m => `${m.SenderRole}: ${m.Message}`).join('\n')}\n\nKhách hàng hỏi: "${latestCustomerMessage.Message}"\nHãy trả lời khách hàng một cách thông minh và tự nhiên:` }
             ]
           }
         ],
@@ -396,7 +472,7 @@ Nguyên tắc:
   }
 
   // 3. Sử dụng Engine Tư vấn Thông minh Chuyên sâu Nội bộ (Smart Vietnamese Advice Engine)
-  const adviceText = buildSmartAdvice(recentCustomerContext || latestCustomerMessage.Message, products, chronologicalHistory);
+  const adviceText = buildSmartAdvice(latestCustomerMessage.Message, products, chronologicalHistory);
 
   const assistantMessage = await SupportMessage.create({
     ConversationID: conversation.ConversationID,
