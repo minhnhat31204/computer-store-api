@@ -1,13 +1,13 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "MANB Computer Store API",
-    "description": "Tài liệu RESTful API cho Hệ thống Bán máy tính & Linh kiện MANB SHOP",
+    "title": "DEVORA Computer Store API",
+    "description": "Tài liệu RESTful API cho Hệ thống Bán máy tính & Linh kiện DEVORA",
     "version": "1.0.0",
     "contact": {
-      "name": "MANB SHOP Support",
-      "url": "https://manb.id.vn",
-      "email": "support@manb.vn"
+      "name": "DEVORA Support",
+      "url": "https://devora.vn",
+      "email": "support@devora.vn"
     }
   },
   "servers": [
@@ -16,7 +16,7 @@
       "description": "Current Server (Auto)"
     },
     {
-      "url": "https://manb.id.vn/api",
+      "url": "https://devora.vn/api",
       "description": "Production Server"
     },
     {

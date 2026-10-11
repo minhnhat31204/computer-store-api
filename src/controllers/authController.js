@@ -175,7 +175,7 @@ exports.sendPasswordResetOtp = async (req, res) => {
     // Keep the response generic so this endpoint does not reveal whether an account exists.
     if (user) {
       const key = resetKey(channel, contact);
-      if (channel === 'email') await sendChallenge(key, (code) => sendEmail(contact, code, 'Mã OTP đặt lại mật khẩu MANB SHOP'));
+      if (channel === 'email') await sendChallenge(key, (code) => sendEmail(contact, code, 'Mã OTP đặt lại mật khẩu DEVORA'));
       else issueChallenge(key, DEFAULT_PHONE_OTP);
     }
     return res.json({ message: 'Nếu thông tin khớp tài khoản, mã OTP sẽ được gửi đến bạn.' });
@@ -246,7 +246,7 @@ exports.sendEmailVerificationOtp = async (req, res) => {
     const existing = await User.findOne({ where: { RecoveryEmail: email } });
     if (existing && existing.UserID !== user.UserID) return res.status(409).json({ error: 'Email đã được dùng bởi tài khoản khác.' });
     const key = `email:${userId}:${email}`;
-    await sendChallenge(key, (code) => sendEmail(email, code, 'Mã OTP xác minh email MANB SHOP'));
+    await sendChallenge(key, (code) => sendEmail(email, code, 'Mã OTP xác minh email DEVORA'));
     return res.json({ message: 'Đã gửi mã xác minh đến email.' });
   } catch (error) {
     return sendError(res, error, 'Không gửi được mã email.');
@@ -295,7 +295,7 @@ exports.sendLoginOtp = async (req, res) => {
     const email = emailAddress(req.body.email);
     const user = await User.findOne({ where: { Email: email } });
     if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
-    await sendChallenge(`login:${email}`, (code) => sendEmail(email, code, 'Mã OTP đăng nhập MANB SHOP'));
+    await sendChallenge(`login:${email}`, (code) => sendEmail(email, code, 'Mã OTP đăng nhập DEVORA'));
     return res.json({ message: 'Đã gửi OTP.' });
   } catch (error) {
     return sendError(res, error, 'Không gửi được OTP.');

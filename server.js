@@ -39,7 +39,7 @@ app.post('/api/products/upload', upload.single('image'), (req, res) => {
 });
 
 const apiOverview = {
-  name: "MANB Computer Store API",
+  name: "DEVORA Computer Store API",
   status: "online",
   version: "1.0.0",
   timestamp: new Date().toISOString(),
@@ -59,7 +59,7 @@ const apiOverview = {
 const basicAuth = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="MANB Admin Console & Swagger Docs"');
+    res.setHeader('WWW-Authenticate', 'Basic realm="DEVORA Admin Console & Swagger Docs"');
     return res.status(401).send('Authentication required: Vui lòng đăng nhập để truy cập Admin Console và Swagger API.');
   }
 
@@ -79,7 +79,7 @@ const basicAuth = (req, res, next) => {
     // Ignore error
   }
 
-  res.setHeader('WWW-Authenticate', 'Basic realm="MANB Admin Console & Swagger Docs"');
+  res.setHeader('WWW-Authenticate', 'Basic realm="DEVORA Admin Console & Swagger Docs"');
   return res.status(401).send('Tài khoản hoặc mật khẩu không chính xác.');
 };
 

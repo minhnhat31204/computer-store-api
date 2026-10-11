@@ -144,7 +144,7 @@ async function sendEmail(to, code, subject, html) {
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
     subject,
-    text: html ? String(code) : `Ma xac thuc MANB SHOP cua ban la ${code}. Ma co hieu luc trong 5 phut.`,
+    text: html ? String(code) : `Ma xac thuc DEVORA cua ban la ${code}. Ma co hieu luc trong 5 phut.`,
     ...(html ? { html } : {}),
   });
 }

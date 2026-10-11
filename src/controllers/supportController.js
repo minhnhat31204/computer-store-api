@@ -113,7 +113,7 @@ function buildSmartAdvice(question, products, history = []) {
 
   // 1. Nhận diện câu hỏi danh tính: "bạn là gì", "bạn là ai", "mày là ai", "ai đây"
   if (/(ban la ai|ban la gi|may la ai|may la gi|em la ai|em la gi|who are you|ban ten gi|gioi thieu|la ai day|la gi day)/.test(norm)) {
-    return 'Dạ em là **Trợ lý AI của MANB SHOP** (manb.vn)! 🤖✨\n\n' +
+    return 'Dạ em là **Trợ lý AI của DEVORA** (devora.vn)! 🤖✨\n\n' +
       'Nhiệm vụ của em là hỗ trợ quý khách:\n' +
       '• 🔍 Tìm kiếm và tư vấn laptop phù hợp nhất theo ngân sách và công việc (Học tập, Gaming, Đồ họa, Lập trình...).\n' +
       '• 📊 So sánh cấu hình, chip CPU, RAM, card đồ họa và kiểm tra tồn kho trực tiếp.\n' +
@@ -131,7 +131,7 @@ function buildSmartAdvice(question, products, history = []) {
   for (const item of nonCatalogItems) {
     // Chỉ kích hoạt nếu không chứa từ khóa laptop/máy tính
     if (item.pattern.test(norm) && !/(laptop|may tinh|pc|macbook|ram|cpu|ssd|card)/.test(norm)) {
-      return `Dạ hiện tại **MANB SHOP chỉ chuyên kinh doanh các dòng Laptop, Máy tính và linh kiện công nghệ chính hãng**, cửa hàng chưa kinh doanh ${item.name} ạ! 😊\n\n` +
+      return `Dạ hiện tại **DEVORA chỉ chuyên kinh doanh các dòng Laptop, Máy tính và linh kiện công nghệ chính hãng**, cửa hàng chưa kinh doanh ${item.name} ạ! 😊\n\n` +
         'Nếu anh/chị cần tư vấn các dòng **Laptop Gaming, Laptop Sinh viên / Văn phòng, MacBook hoặc Máy trạm đồ họa**, em luôn sẵn sàng hỗ trợ nhiệt tình ạ!';
     }
   }
@@ -139,7 +139,7 @@ function buildSmartAdvice(question, products, history = []) {
   // 3. Phản hồi chào hỏi thân thiện
   const isGreeting = /^(chao|xin chao|hello|hi|alo|shop oi|ad oi|co ai khong|admin oi)\b/.test(norm);
   if (isGreeting && norm.length < 25) {
-    return 'Dạ MANB SHOP xin chào quý khách! 👋\n\nEm là trợ lý AI chuyên tư vấn laptop & máy tính. Em có thể hỗ trợ anh/chị chọn máy theo:\n' +
+    return 'Dạ DEVORA xin chào quý khách! 👋\n\nEm là trợ lý AI chuyên tư vấn laptop & máy tính. Em có thể hỗ trợ anh/chị chọn máy theo:\n' +
       '• 🎮 Laptop Gaming (chơi mượt Valorant, LOL, FO4, GTA V, Black Myth Wukong...)\n' +
       '• 💻 Laptop Sinh viên / Văn phòng (mỏng nhẹ, pin trâu, mượt Word/Excel)\n' +
       '• 🎨 Laptop Đồ họa / Kỹ thuật / Lập trình (màn đẹp, CPU mạnh, RAM 16GB-32GB)\n' +
@@ -160,17 +160,17 @@ function buildSmartAdvice(question, products, history = []) {
 
   // 6. Câu hỏi về địa chỉ cửa hàng, showroom, liên hệ
   if (/(dia chi|o dau|showroom|cua hang|chi nhanh|hotline|so dien thoai|sdt|lien he)/.test(norm)) {
-    return 'Dạ thông tin liên hệ và hệ thống Showroom của MANB SHOP:\n' +
+    return 'Dạ thông tin liên hệ và hệ thống Showroom của DEVORA:\n' +
       '• 📍 **Showroom TP.HCM**: 123 Đường Sư Vạn Hạnh, Quận 10, TP. Hồ Chí Minh\n' +
       '• 📍 **Showroom Hà Nội**: 456 Đường Cầu Giấy, Quận Cầu Giấy, Hà Nội\n' +
       '• ⏰ **Giờ mở cửa**: 08:00 – 21:30 (tất cả các ngày trong tuần)\n' +
       '• 📞 **Hotline / Zalo hỗ trợ**: 0909 680 426\n' +
-      '• 🌐 **Website**: https://manb.vn';
+      '• 🌐 **Website**: https://devora.vn';
   }
 
   // 7. Câu hỏi về chính sách bảo hành, giao hàng, thanh toán
   if (/(bao hanh|doi tra|loi)/.test(norm)) {
-    return 'Dạ về chính sách bảo hành tại MANB SHOP:\n' +
+    return 'Dạ về chính sách bảo hành tại DEVORA:\n' +
       '• Toàn bộ sản phẩm được bảo hành chính hãng từ 12 đến 24 tháng theo tiêu chuẩn nhà sản xuất.\n' +
       '• Hỗ trợ 1 đổi 1 trong vòng 30 ngày nếu phát sinh lỗi phần cứng từ nhà sản xuất.\n' +
       '• Miễn phí cài đặt phần mềm, vệ sinh máy trọn đời tại các showroom.\n' +
@@ -178,7 +178,7 @@ function buildSmartAdvice(question, products, history = []) {
   }
 
   if (/(ship|giao hang|phi van chuyen|van chuyen|cod|nhan hang)/.test(norm)) {
-    return 'Dạ về chính sách giao hàng tại MANB SHOP:\n' +
+    return 'Dạ về chính sách giao hàng tại DEVORA:\n' +
       '• Miễn phí giao hàng toàn quốc (Freeship) cho mọi đơn hàng từ 1.000.000 ₫.\n' +
       '• Giao hỏa tốc 2 giờ tại khu vực nội thành TP.HCM.\n' +
       '• Các tỉnh thành khác nhận hàng từ 2 - 4 ngày làm việc.\n' +
@@ -186,7 +186,7 @@ function buildSmartAdvice(question, products, history = []) {
   }
 
   if (/(tra gop|thanh toan|payos|chuyen khoan)/.test(norm)) {
-    return 'Dạ MANB SHOP hỗ trợ đa dạng phương thức thanh toán linh hoạt:\n' +
+    return 'Dạ DEVORA hỗ trợ đa dạng phương thức thanh toán linh hoạt:\n' +
       '• Thanh toán trực tiếp khi nhận hàng (COD).\n' +
       '• Chuyển khoản ngân hàng quét mã VietQR / PayOS tự động xác nhận sau 3 giây.\n' +
       '• Trả góp 0% lãi suất qua thẻ tín dụng hoặc các đối tác tài chính uy tín.';
@@ -208,7 +208,7 @@ function buildSmartAdvice(question, products, history = []) {
 
   // Nếu người dùng chỉ nói câu ngắn không liên quan và không có ý định mua máy tính
   if (!hasSpecificIntent && norm.split(' ').length <= 4) {
-    return 'Dạ anh/chị cần em hỗ trợ tư vấn dòng laptop nào hay cần giải đáp thông tin gì về sản phẩm tại MANB SHOP không ạ? Em luôn sẵn sàng hỗ trợ nhé! 😊';
+    return 'Dạ anh/chị cần em hỗ trợ tư vấn dòng laptop nào hay cần giải đáp thông tin gì về sản phẩm tại DEVORA không ạ? Em luôn sẵn sàng hỗ trợ nhé! 😊';
   }
 
   // 9. Lọc & xếp hạng sản phẩm thông minh từ Database
@@ -293,7 +293,7 @@ function buildSmartAdvice(question, products, history = []) {
   } else if (isOffice) {
     responseText += 'Dạ phục vụ học tập và công việc văn phòng (ưu tiên mỏng nhẹ, pin trâu, phím êm), anh/chị tham khảo ngay các mẫu này nhé:\n\n';
   } else {
-    responseText += 'Dạ em xin gợi ý các mẫu laptop chất lượng tốt, được nhiều khách hàng ưa chuộng tại MANB SHOP:\n\n';
+    responseText += 'Dạ em xin gợi ý các mẫu laptop chất lượng tốt, được nhiều khách hàng ưa chuộng tại DEVORA:\n\n';
   }
 
   chosenList.forEach(({ product, price, inStock }, idx) => {
@@ -365,12 +365,12 @@ exports.aiReply = async (req, res) => {
     description: clean(p.Description, 400),
   }));
 
-  const systemPrompt = `Bạn là Chuyên gia Tư vấn Bán hàng Laptop & Máy tính cao cấp của MANB.VN (MANB SHOP).
+  const systemPrompt = `Bạn là Chuyên gia Tư vấn Bán hàng Laptop & Máy tính cao cấp của DEVORA.VN (DEVORA).
 Phong cách: Nhiệt tình, thân thiện, am hiểu kỹ thuật chuyên sâu nhưng diễn đạt dễ hiểu, sử dụng tiếng Việt tự nhiên và xưng hô 'em' - 'anh/chị' hoặc 'quý khách'.
 
 Nhiệm vụ:
 1. Đọc hiểu chính xác nhu cầu hoặc câu hỏi của khách hàng.
-2. Nếu khách hỏi thông thường (chào hỏi, bạn là ai, cảm ơn, hỏi bàn/ghế/điện thoại...): Trả lời tự nhiên, lịch sự và giải thích rõ MANB SHOP chỉ chuyên kinh doanh Laptop & Máy tính chính hãng.
+2. Nếu khách hỏi thông thường (chào hỏi, bạn là ai, cảm ơn, hỏi bàn/ghế/điện thoại...): Trả lời tự nhiên, lịch sự và giải thích rõ DEVORA chỉ chuyên kinh doanh Laptop & Máy tính chính hãng.
 3. Nếu khách cần tìm máy: Dựa vào DANH SÁCH SẢN PHẨM THỰC TẾ dưới đây của cửa hàng để đưa ra tư vấn:
 ${JSON.stringify(relevantProducts.slice(0, 25), null, 2)}
 
@@ -413,7 +413,7 @@ Nguyên tắc:
             ConversationID: conversation.ConversationID,
             SenderUserID: null,
             SenderRole: 'AI',
-            SenderName: 'Trợ lý MANB AI',
+            SenderName: 'Trợ lý DEVORA AI',
             Message: text.trim().slice(0, 3000),
           });
           await conversation.update({ LastMessageAt: assistantMessage.CreatedAt });
@@ -459,7 +459,7 @@ Nguyên tắc:
             ConversationID: conversation.ConversationID,
             SenderUserID: null,
             SenderRole: 'AI',
-            SenderName: 'Trợ lý MANB AI',
+            SenderName: 'Trợ lý DEVORA AI',
             Message: text.trim().slice(0, 3000),
           });
           await conversation.update({ LastMessageAt: assistantMessage.CreatedAt });
@@ -478,7 +478,7 @@ Nguyên tắc:
     ConversationID: conversation.ConversationID,
     SenderUserID: null,
     SenderRole: 'AI',
-    SenderName: 'Trợ lý MANB AI',
+    SenderName: 'Trợ lý DEVORA AI',
     Message: adviceText,
   });
 
