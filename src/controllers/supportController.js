@@ -113,7 +113,7 @@ function buildSmartAdvice(question, products, history = []) {
 
   // 1. Nhận diện câu hỏi danh tính: "bạn là gì", "bạn là ai", "mày là ai", "ai đây"
   if (/(ban la ai|ban la gi|may la ai|may la gi|em la ai|em la gi|who are you|ban ten gi|gioi thieu|la ai day|la gi day)/.test(norm)) {
-    return 'Dạ em là **Trợ lý AI của DEVORA** (devora.vn)! 🤖✨\n\n' +
+    return 'Dạ em là **Trợ lý AI của DEVORA** (devora.id.vn)! 🤖✨\n\n' +
       'Nhiệm vụ của em là hỗ trợ quý khách:\n' +
       '• 🔍 Tìm kiếm và tư vấn laptop phù hợp nhất theo ngân sách và công việc (Học tập, Gaming, Đồ họa, Lập trình...).\n' +
       '• 📊 So sánh cấu hình, chip CPU, RAM, card đồ họa và kiểm tra tồn kho trực tiếp.\n' +
@@ -165,7 +165,7 @@ function buildSmartAdvice(question, products, history = []) {
       '• 📍 **Showroom Hà Nội**: 456 Đường Cầu Giấy, Quận Cầu Giấy, Hà Nội\n' +
       '• ⏰ **Giờ mở cửa**: 08:00 – 21:30 (tất cả các ngày trong tuần)\n' +
       '• 📞 **Hotline / Zalo hỗ trợ**: 0909 680 426\n' +
-      '• 🌐 **Website**: https://devora.vn';
+      '• 🌐 **Website**: https://devora.id.vn';
   }
 
   // 7. Câu hỏi về chính sách bảo hành, giao hàng, thanh toán

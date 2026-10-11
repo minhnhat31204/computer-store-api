@@ -6,8 +6,8 @@
     "version": "1.0.0",
     "contact": {
       "name": "DEVORA Support",
-      "url": "https://devora.vn",
-      "email": "support@devora.vn"
+      "url": "https://devora.id.vn",
+      "email": "support@devora.id.vn"
     }
   },
   "servers": [
@@ -16,7 +16,7 @@
       "description": "Current Server (Auto)"
     },
     {
-      "url": "https://devora.vn/api",
+      "url": "https://devora.id.vn/api",
       "description": "Production Server"
     },
     {
