@@ -1,11 +1,13 @@
 const router = require('express').Router();
 const authController = require('../controllers/authController');
+const { authenticateToken } = require('../middlewares/authMiddleware');
 
 // Khai báo đường dẫn đăng ký và đăng nhập
 router.post('/register', authController.register);
 router.post('/register/send-otp', authController.sendRegistrationOtp);
 router.post('/login', authController.login);
 router.post('/firebase-phone-login', authController.firebasePhoneLogin);
+router.get('/me', authenticateToken, authController.getMe);
 
 // Các đường dẫn xử lý quên mật khẩu qua OTP
 router.post('/forgot-password', authController.forgotPassword);

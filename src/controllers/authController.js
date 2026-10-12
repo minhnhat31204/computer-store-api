@@ -6,6 +6,7 @@ const {
   hashPassword, verifyPassword, DEFAULT_PHONE_OTP,
   getLoginLockStatus, recordFailedLogin, clearLoginAttempts,
 } = require('../services/authSecurity');
+const { generateToken } = require('../services/jwtService');
 
 function sendError(res, error, fallback) {
   const status = Number(error.status) || 500;
@@ -60,7 +61,8 @@ exports.register = async (req, res) => {
       Role: 'Customer',
     });
     if (!req.body.firebaseIdToken) consumeChallenge(registrationKey);
-    return res.status(201).json({ message: 'Đăng ký thành công.', user: safeUser(user) });
+    const token = generateToken(user);
+    return res.status(201).json({ message: 'Đăng ký thành công.', token, user: safeUser(user) });
   } catch (error) {
     return sendError(res, error, 'Đăng ký thất bại.');
   }
@@ -143,7 +145,8 @@ exports.login = async (req, res) => {
       user.PasswordHash = await hashPassword(password);
       await user.save();
     }
-    return res.json({ message: 'Đăng nhập thành công.', user: safeUser(user) });
+    const token = generateToken(user);
+    return res.json({ message: 'Đăng nhập thành công.', token, user: safeUser(user) });
   } catch (error) {
     return sendError(res, error, 'Đăng nhập thất bại.');
   }
@@ -154,7 +157,8 @@ exports.firebasePhoneLogin = async (req, res) => {
     const phone = await verifyFirebasePhoneToken(req.body.firebaseIdToken, req.body.phone);
     const user = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(phone) } } });
     if (!user) return res.status(404).json({ error: 'Chưa có tài khoản với số điện thoại này.' });
-    return res.json({ message: 'Đăng nhập thành công.', user: safeUser(user) });
+    const token = generateToken(user);
+    return res.json({ message: 'Đăng nhập thành công.', token, user: safeUser(user) });
   } catch (error) {
     return sendError(res, error, 'Không xác thực được số điện thoại.');
   }
@@ -284,7 +288,8 @@ exports.googleLogin = async (req, res) => {
     const { fullName, email, avatar } = req.body;
     let user = await User.findOne({ where: { Email: email } });
     if (!user) user = await User.create({ FullName: fullName, Email: email, Avatar: avatar, Role: 'Customer' });
-    return res.json({ message: 'Thành công', user: safeUser(user) });
+    const token = generateToken(user);
+    return res.json({ message: 'Thành công', token, user: safeUser(user) });
   } catch (error) {
     return sendError(res, error, 'Đăng nhập Google thất bại.');
   }
@@ -309,9 +314,21 @@ exports.verifyLoginOtp = async (req, res) => {
     const user = await User.findOne({ where: { Email: email }, attributes: { exclude: ['PasswordHash'] } });
     if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
     consumeChallenge(`login:${email}`);
-    return res.json({ message: 'Đăng nhập thành công.', user });
+    const token = generateToken(user);
+    return res.json({ message: 'Đăng nhập thành công.', token, user });
   } catch (error) {
     return sendError(res, error, 'Đăng nhập OTP thất bại.');
+  }
+};
+
+exports.getMe = async (req, res) => {
+  try {
+    if (!req.currentUser) {
+      return res.status(401).json({ error: 'Chưa đăng nhập.' });
+    }
+    return res.json({ user: safeUser(req.currentUser) });
+  } catch (error) {
+    return sendError(res, error, 'Không thể lấy thông tin người dùng.');
   }
 };
 
