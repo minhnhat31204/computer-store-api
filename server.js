@@ -3,12 +3,37 @@ const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('./src/models');
 const Order = require('./src/models/Order');
 require('dotenv').config();
 
 const app = express();
+
+// Trust reverse proxy (Nginx on VPS)
+app.set('trust proxy', 1);
+
+// Chống DDOS / Flood request: tối đa 600 requests trong 1 phút cho mỗi IP
+const generalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Hệ thống phát hiện quá nhiều yêu cầu từ bạn. Vui lòng thử lại sau 1 phút.' },
+});
+app.use(generalLimiter);
+
+// Giới hạn riêng cho API xác thực/đăng nhập: tối đa 30 lần trong 1 phút
+const authLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Thao tác quá nhanh. Vui lòng thử lại sau 1 phút.' },
+});
+app.use('/api/auth', authLimiter);
+
 const allowedOrigins = (process.env.FRONTEND_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true, credentials: true }));
 app.use(express.json({ limit: '50mb' }));
