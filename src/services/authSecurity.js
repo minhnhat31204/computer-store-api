@@ -11,7 +11,6 @@ const challenges = new Map();
 const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_RESEND_MS = 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
-const DEFAULT_PHONE_OTP = '123456';
 
 function normalizePhone(value) {
   const raw = String(value || '').trim();
@@ -219,7 +218,7 @@ function clearLoginAttempts(identifier) {
 module.exports = {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
   getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
-  hashPassword, verifyPassword, DEFAULT_PHONE_OTP,
+  hashPassword, verifyPassword,
   getLoginLockStatus, recordFailedLogin, clearLoginAttempts,
 };
 

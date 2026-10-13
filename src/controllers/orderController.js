@@ -445,20 +445,62 @@ exports.createPayOSPayment = async (req, res) => {
       Status: 'PENDING'
     });
 
-    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const originHeader = req.get('origin') || req.get('referer');
+    let dynamicFrontendUrl = '';
+    if (originHeader) {
+      try {
+        const parsed = new URL(originHeader);
+        dynamicFrontendUrl = `${parsed.protocol}//${parsed.host}`;
+      } catch {}
+    }
+    const frontendUrl = (dynamicFrontendUrl || process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
     const returnBase = (process.env.PAYOS_RETURN_URL || `${frontendUrl}/customer/orders`).replace(/\/$/, '');
     const cancelBase = (process.env.PAYOS_CANCEL_URL || `${frontendUrl}/customer/orders`).replace(/\/$/, '');
     const returnUrl = `${returnBase}/${order.OrderID}?payment=return`;
     const cancelUrl = `${cancelBase}/${order.OrderID}?payment=cancel`;
+
+    // Chuẩn bị chi tiết sản phẩm cho màn hình thanh toán QR PayOS
+    const orderItems = order.OrderItems || [];
+    let payOsItems = orderItems.map((item) => {
+      const prodName = item.Product?.ProductName || `Sản phẩm #${item.ProductID}`;
+      return {
+        name: prodName.slice(0, 50),
+        quantity: Math.max(1, Number(item.Quantity) || 1),
+        price: Math.round(Number(item.UnitPrice) || 0)
+      };
+    });
+
+    // Nếu tổng items không khớp amount (do ship, voucher giảm giá), tính toán bổ sung mục chi tiết
+    const itemsSum = payOsItems.reduce((sum, it) => sum + it.price * it.quantity, 0);
+    const diff = amount - itemsSum;
+    if (diff > 0) {
+      payOsItems.push({
+        name: 'Phí giao hàng & phụ phí'.slice(0, 50),
+        quantity: 1,
+        price: Math.round(diff)
+      });
+    } else if (diff < 0) {
+      // Có giảm giá voucher hoặc chiết khấu, nếu không truyền âm được thì gửi đơn hàng chi tiết gộp
+      payOsItems = [{
+        name: `Đơn hàng #${order.OrderID} (${orderItems.length} sản phẩm)`.slice(0, 50),
+        quantity: 1,
+        price: amount
+      }];
+    }
+
+    if (!payOsItems.length) {
+      payOsItems = [{
+        name: `Đơn hàng #${order.OrderID}`.slice(0, 50),
+        quantity: 1,
+        price: amount
+      }];
+    }
+
     const link = await getPayOS().paymentRequests.create({
       orderCode,
       amount,
       description: `Don hang ${order.OrderID}`,
-      items: [{
-        name: `Don hang #${order.OrderID}`.slice(0, 50),
-        quantity: 1,
-        price: amount
-      }],
+      items: payOsItems,
       returnUrl,
       cancelUrl,
       buyerName: order.RecipientName || undefined,

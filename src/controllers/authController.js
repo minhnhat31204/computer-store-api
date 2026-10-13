@@ -3,7 +3,7 @@ const { User } = require('../models');
 const {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
   getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
-  hashPassword, verifyPassword, DEFAULT_PHONE_OTP,
+  hashPassword, verifyPassword,
   getLoginLockStatus, recordFailedLogin, clearLoginAttempts,
 } = require('../services/authSecurity');
 const { generateToken } = require('../services/jwtService');
@@ -71,10 +71,27 @@ exports.register = async (req, res) => {
 exports.sendRegistrationOtp = async (req, res) => {
   try {
     const phone = normalizePhone(req.body.phone);
-    issueChallenge(`register:phone:${phone}`, DEFAULT_PHONE_OTP);
-    return res.json({ message: `OTP đã sẵn sàng. Mã xác thực là ${DEFAULT_PHONE_OTP}.` });
+    // issueChallenge with no fixedCode → generates a random 6-digit OTP
+    const otp = issueChallenge(`register:phone:${phone}`);
+    return res.json({
+      message: `Đã gửi mã OTP.`,
+      otp,  // returned for demo/dev: UI displays this above the phone input
+    });
   } catch (error) {
     return sendError(res, error, 'Không thể tạo mã OTP.');
+  }
+};
+
+exports.verifyRegistrationOtp = async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body.phone);
+    const otp = String(req.body.otp || '').trim();
+    if (!otp) return res.status(400).json({ error: 'Vui lòng nhập mã OTP.' });
+    const record = checkChallenge(`register:phone:${phone}`, otp);
+    if (!record) return res.status(400).json({ error: 'Mã OTP không đúng hoặc đã hết hạn.' });
+    return res.json({ message: 'Mã OTP hợp lệ. Bạn có thể đặt mật khẩu.' });
+  } catch (error) {
+    return sendError(res, error, 'Xác thực OTP thất bại.');
   }
 };
 
