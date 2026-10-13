@@ -295,8 +295,19 @@
       "get": {
         "tags": ["Orders"],
         "summary": "Lấy danh sách tất cả đơn hàng (Admin)",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Token JWT Admin (hoặc đăng nhập qua nút Authorize ở trên)",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
-          "200": { "description": "Danh sách đơn hàng kèm chi tiết" }
+          "200": { "description": "Danh sách đơn hàng kèm chi tiết" },
+          "401": { "description": "Chưa đăng nhập hoặc thiếu Token" },
+          "403": { "description": "Không có quyền Admin" }
         }
       },
       "post": {
@@ -504,6 +515,23 @@
           "ImageUrl": { "type": "string", "example": "https://example.com/laptop-category.jpg" }
         }
       }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Nhập mã JWT token (sau khi gọi API /auth/login)"
+      },
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "Tài khoản quản trị viên Console / Swagger (mặc định: admin / admin123450)"
+      }
     }
-  }
+  },
+  "security": [
+    { "bearerAuth": [] },
+    { "basicAuth": [] }
+  ]
 }

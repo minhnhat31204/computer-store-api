@@ -6,12 +6,35 @@ const { User } = require('../models');
  */
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ')
+  
+  // 1. Kiểm tra xác thực Basic Auth (Dành cho Swagger UI & Admin Database Console)
+  if (authHeader && authHeader.startsWith('Basic ')) {
+    try {
+      const base64Credentials = authHeader.split(' ')[1];
+      const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+      const [username, ...passwordParts] = credentials.split(':');
+      const password = passwordParts.join(':');
+
+      const adminUser = process.env.ADMIN_CONSOLE_USER || 'admin';
+      const adminPass = process.env.ADMIN_CONSOLE_PASS || 'admin123450';
+
+      if (username === adminUser && password === adminPass) {
+        req.user = { userId: 0, role: 'Admin', fullName: 'Swagger Admin' };
+        req.currentUser = { UserID: 0, Role: 'Admin', FullName: 'Swagger Admin' };
+        return next();
+      }
+    } catch {
+      // Bỏ qua lỗi giải mã Basic Auth
+    }
+  }
+
+  // 2. Kiểm tra xác thực JWT Bearer Token (Header hoặc Query Param)
+  const token = (authHeader && authHeader.startsWith('Bearer '))
     ? authHeader.slice(7).trim()
-    : (req.query?.token || null);
+    : (req.query?.token || req.query?.access_token || null);
 
   if (!token) {
-    return res.status(401).json({ error: 'Không tìm thấy token xác thực. Vui lòng đăng nhập.' });
+    return res.status(401).json({ error: 'Không tìm thấy token xác thực. Vui lòng đăng nhập hoặc nhập token Bearer.' });
   }
 
   try {
