@@ -37,8 +37,10 @@ function otpDigest(code) {
 function issueChallenge(key, fixedCode) {
   const current = challenges.get(key);
   if (current && Date.now() - current.sentAt < OTP_RESEND_MS) {
-    const error = new Error('Vui lòng đợi 60 giây trước khi gửi mã mới.');
+    const remaining = Math.max(1, Math.ceil((OTP_RESEND_MS - (Date.now() - current.sentAt)) / 1000));
+    const error = new Error(`Vui lòng nhập mã OTP hiện tại và đợi ${remaining}s trước khi nhấn gửi OTP mới.`);
     error.status = 429;
+    error.retryAfter = remaining;
     throw error;
   }
   const code = fixedCode == null ? String(crypto.randomInt(100000, 1000000)) : String(fixedCode);
@@ -60,7 +62,12 @@ function checkChallenge(key, code) {
   }
   record.attempts += 1;
   const supplied = otpDigest(code);
-  if (supplied.length !== record.digest.length || !crypto.timingSafeEqual(supplied, record.digest)) return null;
+  if (supplied.length !== record.digest.length || !crypto.timingSafeEqual(supplied, record.digest)) {
+    if (record.attempts >= OTP_MAX_ATTEMPTS) {
+      challenges.delete(key);
+    }
+    return null;
+  }
   record.verified = true;
   return record;
 }
@@ -144,7 +151,7 @@ async function sendEmail(to, code, subject, html) {
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
     subject,
-    text: html ? String(code) : `Ma xac thuc MANB SHOP cua ban la ${code}. Ma co hieu luc trong 5 phut.`,
+    text: html ? String(code) : `Mã xác thực MANB SHOP của bạn là ${code}. Mã có hiệu lực trong 5 phút.`,
     ...(html ? { html } : {}),
   });
 }

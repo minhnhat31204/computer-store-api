@@ -10,7 +10,10 @@ const {
 function sendError(res, error, fallback) {
   const status = Number(error.status) || 500;
   if (status >= 500) console.error(fallback, error.message);
-  return res.status(status).json({ error: status >= 500 && status !== 503 ? fallback : error.message });
+  return res.status(status).json({
+    error: status >= 500 && status !== 503 ? fallback : error.message,
+    ...(error.retryAfter != null ? { retryAfter: error.retryAfter } : {}),
+  });
 }
 
 function emailAddress(value) {
@@ -41,8 +44,11 @@ exports.register = async (req, res) => {
       ? await verifyFirebasePhoneToken(req.body.firebaseIdToken, req.body.phone, { maxAuthAgeSeconds: 600 })
       : normalizePhone(req.body.phone);
     const registrationKey = `register:phone:${phone}`;
-    if (!req.body.firebaseIdToken && !checkChallenge(registrationKey, req.body.otp)) {
-      return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn.' });
+    if (!req.body.firebaseIdToken) {
+      const verifiedRecord = getVerifiedChallenge(registrationKey);
+      if (!verifiedRecord) {
+        return res.status(400).json({ error: 'Vui lòng xác thực mã OTP số điện thoại trước khi đăng ký.' });
+      }
     }
     const password = String(req.body.password || '');
     if (password.length < 8) return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
@@ -69,10 +75,34 @@ exports.register = async (req, res) => {
 exports.sendRegistrationOtp = async (req, res) => {
   try {
     const phone = normalizePhone(req.body.phone);
-    issueChallenge(`register:phone:${phone}`, DEFAULT_PHONE_OTP);
-    return res.json({ message: `OTP đã sẵn sàng. Mã xác thực là ${DEFAULT_PHONE_OTP}.` });
+    const code = issueChallenge(`register:phone:${phone}`);
+    return res.json({
+      message: `Đã gửi mã OTP. Mã xác thực là ${code} (hiệu lực trong 5 phút).`,
+      otp: code,
+    });
   } catch (error) {
     return sendError(res, error, 'Không thể tạo mã OTP.');
+  }
+};
+
+exports.verifyRegistrationOtp = async (req, res) => {
+  try {
+    const phone = normalizePhone(req.body.phone);
+    const otp = String(req.body.otp || '').trim();
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: 'Mã OTP phải gồm 6 chữ số.' });
+    }
+    const registrationKey = `register:phone:${phone}`;
+    const record = checkChallenge(registrationKey, otp);
+    if (!record) {
+      return res.status(400).json({ error: 'Mã OTP không đúng hoặc đã hết hạn.' });
+    }
+    return res.json({
+      message: 'Xác thực số điện thoại thành công. Vui lòng thiết lập mật khẩu.',
+      verified: true,
+    });
+  } catch (error) {
+    return sendError(res, error, 'Không xác thực được mã OTP.');
   }
 };
 
@@ -172,13 +202,36 @@ exports.sendPasswordResetOtp = async (req, res) => {
           { Email: contact },
         ] } });
 
-    // Keep the response generic so this endpoint does not reveal whether an account exists.
-    if (user) {
-      const key = resetKey(channel, contact);
-      if (channel === 'email') await sendChallenge(key, (code) => sendEmail(contact, code, 'Mã OTP đặt lại mật khẩu MANB SHOP'));
-      else issueChallenge(key, DEFAULT_PHONE_OTP);
+    if (!user) {
+      return res.status(404).json({
+        error: channel === 'phone' ? 'Số điện thoại này chưa được đăng ký tài khoản.' : 'Email này chưa được liên kết với tài khoản nào.'
+      });
     }
-    return res.json({ message: 'Nếu thông tin khớp tài khoản, mã OTP sẽ được gửi đến bạn.' });
+
+    const key = resetKey(channel, contact);
+    let code;
+    if (channel === 'email') {
+      try {
+        await sendChallenge(key, (generatedCode) => {
+          code = generatedCode;
+          return sendEmail(contact, generatedCode, 'Mã OTP đặt lại mật khẩu MANB SHOP');
+        });
+      } catch (err) {
+        // Nếu chưa cấu hình SMTP, tự sinh OTP giả lập để người dùng vẫn thao tác được
+        if (err.status === 503 || err.code === 'ESOCKET' || err.code === 'ECONNREFUSED') {
+          code = issueChallenge(key);
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      code = issueChallenge(key);
+    }
+
+    return res.json({
+      message: `Đã tạo mã OTP xác thực (hiệu lực trong 5 phút).`,
+      otp: code,
+    });
   } catch (error) {
     return sendError(res, error, 'Không gửi được mã OTP.');
   }
