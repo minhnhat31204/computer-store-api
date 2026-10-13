@@ -1190,7 +1190,7 @@
       "basicAuth": {
         "type": "http",
         "scheme": "basic",
-        "description": "Tài khoản quản trị viên Console / Swagger (mặc định: admin / admin123450)"
+        "description": "Xác thực tài khoản quản trị viên hệ thống (Basic Auth)"
       }
     }
   },

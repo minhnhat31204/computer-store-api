@@ -124,6 +124,36 @@ app.get(['/api/docs', '/api/swagger', '/docs', '/swagger', '/swagger.html', '/ap
 app.get(['/api/swagger.json', '/swagger.json'], basicAuth, (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'swagger.json'));
 });
+app.get(['/api/logout', '/logout'], (_req, res) => {
+  res.setHeader('WWW-Authenticate', 'Basic realm="DEVORA Admin Console & Swagger Docs"');
+  res.status(401).send(`
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="utf-8">
+      <title>Đã Đăng Xuất - DEVORA</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 36px 32px; max-width: 440px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+        .icon { font-size: 48px; margin-bottom: 16px; }
+        h2 { margin: 0 0 10px; font-size: 22px; color: #fff; }
+        p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px; }
+        .btn { display: inline-block; background: #2563eb; color: #fff; text-decoration: none; font-weight: bold; padding: 12px 24px; border-radius: 12px; font-size: 14px; transition: 0.2s; }
+        .btn:hover { background: #1d4ed8; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon">🔒</div>
+        <h2>Đã Đăng Xuất Thành Công</h2>
+        <p>Phiên bảo mật đã được xóa khỏi trình duyệt. Bất kỳ ai truy cập lại trang Swagger hay Console đều phải nhập chính xác tài khoản và mật khẩu quản trị viên.</p>
+        <a href="/api/swagger" class="btn">Đăng Nhập Lại Vào Swagger</a>
+      </div>
+    </body>
+    </html>
+  `);
+});
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.use(express.static(path.join(__dirname, 'public')));
