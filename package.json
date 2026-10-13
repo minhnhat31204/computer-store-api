@@ -27,6 +27,7 @@
     "tedious": "^20.0.0"
   },
   "devDependencies": {
+    "docx": "^9.10.0",
     "nodemon": "^3.1.14"
   }
 }

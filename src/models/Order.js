@@ -18,7 +18,15 @@ const Order = sequelize.define('Order', {
   PaymentMethod: { type: DataTypes.STRING },
   DiscountAmount: { type: DataTypes.DECIMAL(18, 2) },
   VoucherCode: { type: DataTypes.STRING },
-  VoucherID: { type: DataTypes.INTEGER }
+  VoucherID: { type: DataTypes.INTEGER },
+  RefundRequestAt: { type: DataTypes.DATE, allowNull: true },
+  RefundBankName: { type: DataTypes.STRING, allowNull: true },
+  RefundBankAccount: { type: DataTypes.STRING, allowNull: true },
+  RefundBankHolder: { type: DataTypes.STRING, allowNull: true },
+  RefundPhone: { type: DataTypes.STRING, allowNull: true },
+  RefundReason: { type: DataTypes.TEXT, allowNull: true },
+  RefundStatus: { type: DataTypes.STRING, allowNull: true }, // 'pending', 'approved', 'rejected'
+  RefundApprovedAt: { type: DataTypes.DATE, allowNull: true }
 }, { timestamps: false });
 
 module.exports = Order;

@@ -104,4 +104,76 @@ exports.delete = async (req, res) => {
   }
 };
 
+// Kiểm tra xem đơn hàng đã được đánh giá chưa (1 đánh giá cho cả đơn)
+exports.checkOrderReview = async (req, res) => {
+  try {
+    const { orderId, userId } = req.query;
+    if (!orderId || !userId) {
+      return res.status(400).json({ error: 'Thiếu orderId hoặc userId.' });
+    }
+    const review = await Review.findOne({
+      where: {
+        OrderID: Number(orderId),
+        UserID: Number(userId)
+      }
+    });
+    return res.status(200).json({ reviewed: Boolean(review), review: review || null });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+// Đánh giá cả đơn hàng (gắn cho tất cả sản phẩm trong đơn)
+exports.createOrderReview = async (req, res) => {
+  try {
+    const { UserID, OrderID, Rating, Comment } = req.body;
+    if (!UserID || !OrderID || !Rating) {
+      return res.status(400).json({ error: 'Vui lòng cung cấp UserID, OrderID và số sao Rating.' });
+    }
+
+    const { Order, OrderItem } = require('../models');
+    const order = await Order.findOne({
+      where: { OrderID, UserID },
+      include: [{ model: OrderItem }]
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    }
+
+    const status = String(order.Status || '').toLowerCase();
+    if (!['completed', 'delivered', 'đã giao'].includes(status)) {
+      return res.status(400).json({ error: 'Chỉ có thể đánh giá khi đơn hàng đã được giao thành công.' });
+    }
+
+    const existing = await Review.findOne({ where: { OrderID, UserID } });
+    if (existing) {
+      return res.status(400).json({ error: 'Đơn hàng này đã được đánh giá rồi.' });
+    }
+
+    const items = order.OrderItems || [];
+    if (items.length === 0) {
+      return res.status(400).json({ error: 'Đơn hàng không có sản phẩm để đánh giá.' });
+    }
+
+    // Tạo review cho từng sản phẩm trong đơn
+    const reviews = [];
+    for (const item of items) {
+      const rev = await Review.create({
+        Rating: Number(Rating),
+        Comment: Comment ? String(Comment).trim() : '',
+        ProductID: item.ProductID,
+        UserID: Number(UserID),
+        OrderID: Number(OrderID),
+        ReviewDate: new Date()
+      });
+      reviews.push(rev);
+    }
+
+    return res.status(201).json({ message: 'Đánh giá đơn hàng thành công!', review: reviews[0] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 

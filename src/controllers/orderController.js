@@ -180,7 +180,7 @@ exports.getStatusHistory = async (req, res) => {
 
 exports.updateStatus = async (req, res) => {
   try {
-    const allowedStatuses = new Set(['Pending', 'Confirmed', 'Processing', 'Shipping', 'Delivered', 'Cancelled']);
+    const allowedStatuses = new Set(['Pending', 'Confirmed', 'Processing', 'Shipping', 'Delivered', 'Cancelled', 'RefundPending', 'Pending Refund']);
     const status = String(req.body.Status || '').trim();
     if (!allowedStatuses.has(status)) {
       return res.status(400).json({ error: 'Tiến độ đơn hàng không hợp lệ.' });
@@ -602,5 +602,195 @@ exports.getPaymentStatus = async (req, res) => {
     return res.status(200).json({ payment: payment || null, orderStatus: synchronizedOrderStatus || latestOrder?.Status });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+};
+
+// Yêu cầu hủy và hoàn tiền cho đơn đã thanh toán
+exports.submitRefundRequest = async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+    const userId = Number(req.user?.UserID || req.body.UserID);
+    const { Phone, BankName, BankAccount, BankHolder, Reason } = req.body;
+
+    if (!Phone || !BankName || !BankAccount || !BankHolder) {
+      return res.status(400).json({ error: 'Vui lòng điền đầy đủ thông tin nhận hoàn tiền (SĐT, ngân hàng, số tài khoản, tên chủ tài khoản).' });
+    }
+
+    const result = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const order = await Order.findByPk(orderId, { transaction });
+      if (!order) return { missing: true };
+      if (Number(order.UserID) !== userId) {
+        const error = new Error('Bạn không có quyền thao tác trên đơn hàng này.');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      const st = String(order.Status || '').trim().toLowerCase();
+      if (['shipping', 'shipped', 'delivering', 'delivered', 'completed', 'cancelled', 'canceled'].includes(st)) {
+        const error = new Error('Đơn hàng đang giao hoặc đã hoàn tất/đã hủy, không thể yêu cầu hoàn tiền.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      await order.update({
+        Status: 'RefundPending',
+        RefundRequestAt: new Date(),
+        RefundPhone: String(Phone).trim(),
+        RefundBankName: String(BankName).trim(),
+        RefundBankAccount: String(BankAccount).trim(),
+        RefundBankHolder: String(BankHolder).trim(),
+        RefundReason: Reason ? String(Reason).trim() : null,
+        RefundStatus: 'pending'
+      }, { transaction });
+
+      await OrderStatusHistory.create({
+        OrderID: order.OrderID,
+        ActorUserID: userId,
+        PreviousStatus: order.Status,
+        NewStatus: 'RefundPending',
+        Note: `Khách yêu cầu hoàn tiền qua ${BankName} - STK: ${BankAccount} - Chủ TK: ${BankHolder}`,
+      }, { transaction });
+
+      return { order };
+    });
+
+    if (result.missing) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+
+    // Hoàn lại kho sau 3 phút như user yêu cầu
+    setTimeout(async () => {
+      try {
+        await sequelize.transaction(async (t) => {
+          const freshOrder = await Order.findByPk(orderId, { transaction: t });
+          if (freshOrder && freshOrder.InventoryReserved && ['refundpending', 'pending refund'].includes(String(freshOrder.Status || '').toLowerCase())) {
+            await adjustOrderInventory(orderId, 1, t);
+            await freshOrder.update({ InventoryReserved: false }, { transaction: t });
+            console.log(`[Inventory Auto-Restore] Hoàn lại kho cho đơn hàng #${orderId} sau 3 phút chờ hoàn tiền.`);
+          }
+        });
+      } catch (err) {
+        console.error(`[Inventory Auto-Restore Error] Lỗi hoàn kho cho đơn #${orderId}:`, err.message);
+      }
+    }, 180000);
+
+    await notifyOrderStatus(result.order, 'RefundPending').catch(() => {});
+    return res.status(200).json({ message: 'Yêu cầu hoàn tiền đã được gửi. Cửa hàng sẽ xét duyệt sớm nhất.', order: result.order });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Không gửi được yêu cầu hoàn tiền.' });
+  }
+};
+
+// Admin phê duyệt yêu cầu hoàn tiền
+exports.approveRefundRequest = async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+    const result = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const order = await Order.findByPk(orderId, { transaction });
+      if (!order) return { missing: true };
+
+      if (order.RefundStatus !== 'pending') {
+        const error = new Error('Đơn hàng không ở trạng thái chờ hoàn tiền hoặc đã được xử lý trước đó.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (order.InventoryReserved) {
+        await adjustOrderInventory(order.OrderID, 1, transaction);
+      }
+
+      await order.update({
+        Status: 'Cancelled',
+        RefundStatus: 'approved',
+        RefundApprovedAt: new Date(),
+        InventoryReserved: false
+      }, { transaction });
+
+      await OrderStatusHistory.create({
+        OrderID: order.OrderID,
+        ActorUserID: req.user?.UserID || null,
+        PreviousStatus: 'RefundPending',
+        NewStatus: 'Cancelled',
+        Note: 'Admin đã phê duyệt yêu cầu hoàn tiền và hoàn tất chuyển khoản cho khách.',
+      }, { transaction });
+
+      return { order };
+    });
+
+    if (result.missing) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    await notifyOrderStatus(result.order, 'Cancelled').catch(() => {});
+    return res.status(200).json({ message: 'Đã phê duyệt hoàn tiền và chuyển trạng thái đơn hàng sang Đã hủy.', order: result.order });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Không phê duyệt được yêu cầu hoàn tiền.' });
+  }
+};
+
+// Admin từ chối hoàn tiền
+exports.rejectRefundRequest = async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+    const { note } = req.body;
+    const result = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const order = await Order.findByPk(orderId, { transaction });
+      if (!order) return { missing: true };
+
+      if (order.RefundStatus !== 'pending') {
+        const error = new Error('Đơn hàng không ở trạng thái chờ hoàn tiền.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (!order.InventoryReserved) {
+        await adjustOrderInventory(order.OrderID, -1, transaction);
+      }
+
+      await order.update({
+        Status: 'Processing',
+        RefundStatus: 'rejected',
+        InventoryReserved: true
+      }, { transaction });
+
+      await OrderStatusHistory.create({
+        OrderID: order.OrderID,
+        ActorUserID: req.user?.UserID || null,
+        PreviousStatus: 'RefundPending',
+        NewStatus: 'Processing',
+        Note: `Admin từ chối hoàn tiền: ${note || 'Không thỏa điều kiện hoàn tiền'}`,
+      }, { transaction });
+
+      return { order };
+    });
+
+    if (result.missing) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    return res.status(200).json({ message: 'Đã từ chối yêu cầu hoàn tiền.', order: result.order });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Không xử lý được yêu cầu từ chối hoàn tiền.' });
+  }
+};
+
+// Admin lấy danh sách yêu cầu hoàn tiền
+exports.getRefundRequests = async (req, res) => {
+  try {
+    const data = await Order.findAll({
+      where: {
+        RefundStatus: 'pending'
+      },
+      include: [
+        { model: User, attributes: ['UserID', 'FullName', 'Email', 'Phone'] },
+        {
+          model: OrderItem,
+          include: [{ model: Product }]
+        },
+        {
+          model: PaymentTransaction,
+          as: 'Payments',
+          separate: true,
+          limit: 1,
+          order: [['PaymentTransactionID', 'DESC']]
+        }
+      ],
+      order: [['RefundRequestAt', 'DESC']]
+    });
+    return res.status(200).json(data);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 };

@@ -210,8 +210,30 @@ async function ensureOrderInventoryColumn() {
       CarrierName: { type: DataTypes.STRING(100), allowNull: true },
       TrackingNumber: { type: DataTypes.STRING(150), allowNull: true },
       EstimatedDelivery: { type: DataTypes.DATEONLY, allowNull: true },
+      RefundRequestAt: { type: DataTypes.DATE, allowNull: true },
+      RefundBankName: { type: DataTypes.STRING(100), allowNull: true },
+      RefundBankAccount: { type: DataTypes.STRING(100), allowNull: true },
+      RefundBankHolder: { type: DataTypes.STRING(150), allowNull: true },
+      RefundPhone: { type: DataTypes.STRING(50), allowNull: true },
+      RefundReason: { type: DataTypes.TEXT, allowNull: true },
+      RefundStatus: { type: DataTypes.STRING(50), allowNull: true },
+      RefundApprovedAt: { type: DataTypes.DATE, allowNull: true },
     })) {
       if (!columns[name]) await queryInterface.addColumn(tableName, name, definition);
+    }
+
+    const { Promotion } = require('./src/models');
+    const promoTable = Promotion.getTableName();
+    const promoCols = await queryInterface.describeTable(promoTable);
+    for (const [name, definition] of Object.entries({
+      LinkUrl: { type: DataTypes.STRING, allowNull: true },
+      DiscountPercent: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+      ProductIDs: { type: DataTypes.TEXT, allowNull: true },
+      IsActive: { type: DataTypes.BOOLEAN, defaultValue: true },
+      StartDate: { type: DataTypes.DATEONLY, allowNull: true },
+      EndDate: { type: DataTypes.DATEONLY, allowNull: true },
+    })) {
+      if (!promoCols[name]) await queryInterface.addColumn(promoTable, name, definition);
     }
   } catch (err) {
     console.warn('ensureOrderInventoryColumn warning:', err.message);

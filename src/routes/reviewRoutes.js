@@ -1,7 +1,9 @@
 const router = require('express').Router();
 const c = require('../controllers/reviewController');
 
-router.get('/', c.getAll); // ThÃªm route nÃ y Ä‘á»ƒ sá»­a lá»—i HTTP 404 trÃªn Web Dashboard
+router.get('/', c.getAll);
+router.get('/check-order', c.checkOrderReview);
+router.post('/order', c.createOrderReview);
 router.get('/product/:productId', c.getByProduct);
 router.get('/check-eligibility', c.checkEligibility);
 router.post('/', c.create);

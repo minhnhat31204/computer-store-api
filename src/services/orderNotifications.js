@@ -14,6 +14,8 @@ const STATUS_COPY = {
   delivered: ['Đơn hàng đã giao', 'Đơn hàng đã được giao hoàn tất'],
   cancelled: ['Đơn hàng đã hủy', 'Đơn hàng đã bị hủy'],
   canceled: ['Đơn hàng đã hủy', 'Đơn hàng đã bị hủy'],
+  refundpending: ['Chờ hoàn tiền', 'Yêu cầu hoàn tiền của bạn đang được xử lý'],
+  'pending refund': ['Chờ hoàn tiền', 'Yêu cầu hoàn tiền của bạn đang được xử lý'],
 };
 
 async function createOrderNotification({ userId, orderId, eventKey, type, title, message }) {
