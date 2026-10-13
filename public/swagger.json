@@ -1,13 +1,13 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "MANB Computer Store API",
-    "description": "Tài liệu RESTful API cho Hệ thống Bán máy tính & Linh kiện MANB SHOP",
+    "title": "DEVORA Computer Store API",
+    "description": "Tài liệu RESTful API cho Hệ thống Bán máy tính & Linh kiện DEVORA",
     "version": "1.0.0",
     "contact": {
-      "name": "MANB SHOP Support",
-      "url": "https://manb.id.vn",
-      "email": "support@manb.vn"
+      "name": "DEVORA Support",
+      "url": "https://devora.id.vn",
+      "email": "support@devora.id.vn"
     }
   },
   "servers": [
@@ -16,7 +16,7 @@
       "description": "Current Server (Auto)"
     },
     {
-      "url": "https://manb.id.vn/api",
+      "url": "https://devora.id.vn/api",
       "description": "Production Server"
     },
     {
@@ -25,24 +25,65 @@
     }
   ],
   "tags": [
-    { "name": "Auth", "description": "Xác thực & Quản lý tài khoản" },
-    { "name": "Products", "description": "Quản lý sản phẩm & upload hình ảnh" },
-    { "name": "Categories", "description": "Danh mục sản phẩm" },
-    { "name": "Product Variants", "description": "Biến thể sản phẩm (Màu sắc, cấu hình)" },
-    { "name": "Orders", "description": "Quản lý đơn hàng & thanh toán PayOS" },
-    { "name": "Cart", "description": "Giỏ hàng của người dùng" },
-    { "name": "Promotions", "description": "Banner quảng cáo & khuyến mãi" },
-    { "name": "Vouchers", "description": "Mã giảm giá" },
-    { "name": "Reviews", "description": "Đánh giá sản phẩm" },
-    { "name": "Favorites", "description": "Sản phẩm yêu thích" },
-    { "name": "Addresses", "description": "Sổ địa chỉ giao hàng" },
-    { "name": "Notifications", "description": "Thông báo đơn hàng & hệ thống" },
-    { "name": "System", "description": "Kiểm tra tình trạng máy chủ (Health Check)" }
+    {
+      "name": "Auth",
+      "description": "Xác thực & Quản lý tài khoản"
+    },
+    {
+      "name": "Products",
+      "description": "Quản lý sản phẩm & upload hình ảnh"
+    },
+    {
+      "name": "Categories",
+      "description": "Danh mục sản phẩm"
+    },
+    {
+      "name": "Product Variants",
+      "description": "Biến thể sản phẩm (Màu sắc, cấu hình)"
+    },
+    {
+      "name": "Orders",
+      "description": "Quản lý đơn hàng & thanh toán PayOS"
+    },
+    {
+      "name": "Cart",
+      "description": "Giỏ hàng của người dùng"
+    },
+    {
+      "name": "Promotions",
+      "description": "Banner quảng cáo & khuyến mãi"
+    },
+    {
+      "name": "Vouchers",
+      "description": "Mã giảm giá"
+    },
+    {
+      "name": "Reviews",
+      "description": "Đánh giá sản phẩm"
+    },
+    {
+      "name": "Favorites",
+      "description": "Sản phẩm yêu thích"
+    },
+    {
+      "name": "Addresses",
+      "description": "Sổ địa chỉ giao hàng"
+    },
+    {
+      "name": "Notifications",
+      "description": "Thông báo đơn hàng & hệ thống"
+    },
+    {
+      "name": "System",
+      "description": "Kiểm tra tình trạng máy chủ (Health Check)"
+    }
   ],
   "paths": {
     "/health": {
       "get": {
-        "tags": ["System"],
+        "tags": [
+          "System"
+        ],
         "summary": "Kiểm tra tình trạng máy chủ",
         "responses": {
           "200": {
@@ -52,18 +93,34 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean", "example": true }
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    }
                   }
                 }
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/products": {
       "get": {
-        "tags": ["Products"],
+        "tags": [
+          "Products"
+        ],
         "summary": "Lấy danh sách tất cả sản phẩm",
         "responses": {
           "200": {
@@ -72,21 +129,38 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/Product" }
+                  "items": {
+                    "$ref": "#/components/schemas/Product"
+                  }
                 }
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       },
       "post": {
-        "tags": ["Products"],
+        "tags": [
+          "Products"
+        ],
         "summary": "Tạo sản phẩm mới",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ProductInput" }
+              "schema": {
+                "$ref": "#/components/schemas/ProductInput"
+              }
             }
           }
         },
@@ -95,57 +169,143 @@
             "description": "Tạo sản phẩm thành công",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Product" }
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/products/{id}": {
       "get": {
-        "tags": ["Products"],
+        "tags": [
+          "Products"
+        ],
         "summary": "Xem chi tiết một sản phẩm",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Thông tin sản phẩm", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Product" } } } },
-          "404": { "description": "Không tìm thấy sản phẩm" }
+          "200": {
+            "description": "Thông tin sản phẩm",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không tìm thấy sản phẩm"
+          }
         }
       },
       "put": {
-        "tags": ["Products"],
+        "tags": [
+          "Products"
+        ],
         "summary": "Cập nhật thông tin sản phẩm",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ProductInput" }
+              "schema": {
+                "$ref": "#/components/schemas/ProductInput"
+              }
             }
           }
         },
         "responses": {
-          "200": { "description": "Cập nhật thành công" }
+          "200": {
+            "description": "Cập nhật thành công"
+          }
         }
       },
       "delete": {
-        "tags": ["Products"],
+        "tags": [
+          "Products"
+        ],
         "summary": "Xóa sản phẩm",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Xóa thành công" }
+          "200": {
+            "description": "Xóa thành công"
+          }
         }
       }
     },
     "/categories": {
       "get": {
-        "tags": ["Categories"],
+        "tags": [
+          "Categories"
+        ],
         "summary": "Lấy danh sách danh mục",
         "responses": {
           "200": {
@@ -154,15 +314,30 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/Category" }
+                  "items": {
+                    "$ref": "#/components/schemas/Category"
+                  }
                 }
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       },
       "post": {
-        "tags": ["Categories"],
+        "tags": [
+          "Categories"
+        ],
         "summary": "Tạo danh mục mới",
         "requestBody": {
           "required": true,
@@ -170,39 +345,92 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["CategoryName"],
+                "required": [
+                  "CategoryName"
+                ],
                 "properties": {
-                  "CategoryName": { "type": "string", "example": "Laptop Gaming" },
-                  "ImageUrl": { "type": "string", "example": "https://example.com/laptop.jpg" }
+                  "CategoryName": {
+                    "type": "string",
+                    "example": "Laptop Gaming"
+                  },
+                  "ImageUrl": {
+                    "type": "string",
+                    "example": "https://example.com/laptop.jpg"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "201": { "description": "Tạo thành công" }
-        }
+          "201": {
+            "description": "Tạo thành công"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/promotions": {
       "get": {
-        "tags": ["Promotions"],
+        "tags": [
+          "Promotions"
+        ],
         "summary": "Lấy danh sách banner khuyến mãi",
         "responses": {
-          "200": { "description": "Danh sách banner khuyến mãi" }
-        }
+          "200": {
+            "description": "Danh sách banner khuyến mãi"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/vouchers": {
       "get": {
-        "tags": ["Vouchers"],
+        "tags": [
+          "Vouchers"
+        ],
         "summary": "Lấy danh sách mã giảm giá",
         "responses": {
-          "200": { "description": "Danh sách voucher" }
-        }
+          "200": {
+            "description": "Danh sách voucher"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       },
       "post": {
-        "tags": ["Vouchers"],
+        "tags": [
+          "Vouchers"
+        ],
         "summary": "Tạo mới mã giảm giá (Admin)",
         "requestBody": {
           "required": true,
@@ -210,27 +438,65 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["Code", "Name", "DiscountPercentage"],
+                "required": [
+                  "Code",
+                  "Name",
+                  "DiscountPercentage"
+                ],
                 "properties": {
-                  "Code": { "type": "string", "example": "SALE20" },
-                  "Name": { "type": "string", "example": "Giảm giá mùa hè 20%" },
-                  "DiscountPercentage": { "type": "number", "example": 20 },
-                  "MaxDiscountAmount": { "type": "number", "example": 200000 },
-                  "ExpiryDate": { "type": "string", "format": "date", "example": "2026-12-31" },
-                  "IsActive": { "type": "boolean", "example": true }
+                  "Code": {
+                    "type": "string",
+                    "example": "SALE20"
+                  },
+                  "Name": {
+                    "type": "string",
+                    "example": "Giảm giá mùa hè 20%"
+                  },
+                  "DiscountPercentage": {
+                    "type": "number",
+                    "example": 20
+                  },
+                  "MaxDiscountAmount": {
+                    "type": "number",
+                    "example": 200000
+                  },
+                  "ExpiryDate": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-12-31"
+                  },
+                  "IsActive": {
+                    "type": "boolean",
+                    "example": true
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "201": { "description": "Tạo mã giảm giá thành công" }
-        }
+          "201": {
+            "description": "Tạo mã giảm giá thành công"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/vouchers/validate": {
       "post": {
-        "tags": ["Vouchers"],
+        "tags": [
+          "Vouchers"
+        ],
         "summary": "Kiểm tra và tính mức giảm cho mã giảm giá (Customer)",
         "requestBody": {
           "required": true,
@@ -238,32 +504,99 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["code"],
+                "required": [
+                  "code"
+                ],
                 "properties": {
-                  "code": { "type": "string", "example": "SALE20" },
-                  "subtotal": { "type": "number", "example": 1000000 }
+                  "code": {
+                    "type": "string",
+                    "example": "SALE20"
+                  },
+                  "subtotal": {
+                    "type": "number",
+                    "example": 1000000
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Mã hợp lệ và trả về mức giảm" },
-          "400": { "description": "Mã không hợp lệ hoặc đã hết hạn" }
-        }
+          "200": {
+            "description": "Mã hợp lệ và trả về mức giảm"
+          },
+          "400": {
+            "description": "Mã không hợp lệ hoặc đã hết hạn"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/vouchers/{id}": {
       "get": {
-        "tags": ["Vouchers"],
+        "tags": [
+          "Vouchers"
+        ],
         "summary": "Chi tiết mã giảm giá",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
-        "responses": { "200": { "description": "Thông tin voucher" } }
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thông tin voucher"
+          }
+        }
       },
       "put": {
-        "tags": ["Vouchers"],
+        "tags": [
+          "Vouchers"
+        ],
         "summary": "Cập nhật mã giảm giá (Admin)",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -271,36 +604,100 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "Code": { "type": "string" },
-                  "Name": { "type": "string" },
-                  "DiscountPercentage": { "type": "number" },
-                  "MaxDiscountAmount": { "type": "number" },
-                  "ExpiryDate": { "type": "string", "format": "date" },
-                  "IsActive": { "type": "boolean" }
+                  "Code": {
+                    "type": "string"
+                  },
+                  "Name": {
+                    "type": "string"
+                  },
+                  "DiscountPercentage": {
+                    "type": "number"
+                  },
+                  "MaxDiscountAmount": {
+                    "type": "number"
+                  },
+                  "ExpiryDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "IsActive": {
+                    "type": "boolean"
+                  }
                 }
               }
             }
           }
         },
-        "responses": { "200": { "description": "Cập nhật thành công" } }
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công"
+          }
+        }
       },
       "delete": {
-        "tags": ["Vouchers"],
+        "tags": [
+          "Vouchers"
+        ],
         "summary": "Xóa mã giảm giá (Admin)",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
-        "responses": { "200": { "description": "Xóa thành công" } }
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa thành công"
+          }
+        }
       }
     },
     "/orders": {
       "get": {
-        "tags": ["Orders"],
+        "tags": [
+          "Orders"
+        ],
         "summary": "Lấy danh sách tất cả đơn hàng (Admin)",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Token JWT Admin (hoặc đăng nhập qua nút Authorize ở trên)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": { "description": "Danh sách đơn hàng kèm chi tiết" }
+          "200": {
+            "description": "Danh sách đơn hàng kèm chi tiết"
+          },
+          "401": {
+            "description": "Chưa đăng nhập hoặc thiếu Token"
+          },
+          "403": {
+            "description": "Không có quyền Admin"
+          }
         }
       },
       "post": {
-        "tags": ["Orders"],
+        "tags": [
+          "Orders"
+        ],
         "summary": "Tạo đơn hàng mới (Checkout)",
         "requestBody": {
           "required": true,
@@ -308,22 +705,61 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["UserID", "RecipientName", "RecipientPhone", "ShippingAddress", "TotalAmount", "PaymentMethod", "Items"],
+                "required": [
+                  "UserID",
+                  "RecipientName",
+                  "RecipientPhone",
+                  "ShippingAddress",
+                  "TotalAmount",
+                  "PaymentMethod",
+                  "Items"
+                ],
                 "properties": {
-                  "UserID": { "type": "integer", "example": 4 },
-                  "RecipientName": { "type": "string", "example": "Nguyễn Văn A" },
-                  "RecipientPhone": { "type": "string", "example": "0909123456" },
-                  "ShippingAddress": { "type": "string", "example": "123 Nguyễn Huệ, Quận 1, TPHCM" },
-                  "TotalAmount": { "type": "number", "example": 18990000 },
-                  "PaymentMethod": { "type": "string", "enum": ["COD", "PayOS"], "example": "PayOS" },
+                  "UserID": {
+                    "type": "integer",
+                    "example": 4
+                  },
+                  "RecipientName": {
+                    "type": "string",
+                    "example": "Nguyễn Văn A"
+                  },
+                  "RecipientPhone": {
+                    "type": "string",
+                    "example": "0909123456"
+                  },
+                  "ShippingAddress": {
+                    "type": "string",
+                    "example": "123 Nguyễn Huệ, Quận 1, TPHCM"
+                  },
+                  "TotalAmount": {
+                    "type": "number",
+                    "example": 18990000
+                  },
+                  "PaymentMethod": {
+                    "type": "string",
+                    "enum": [
+                      "COD",
+                      "PayOS"
+                    ],
+                    "example": "PayOS"
+                  },
                   "Items": {
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
-                        "ProductID": { "type": "integer", "example": 1 },
-                        "Quantity": { "type": "integer", "example": 1 },
-                        "Price": { "type": "number", "example": 18990000 }
+                        "ProductID": {
+                          "type": "integer",
+                          "example": 1
+                        },
+                        "Quantity": {
+                          "type": "integer",
+                          "example": 1
+                        },
+                        "Price": {
+                          "type": "number",
+                          "example": 18990000
+                        }
                       }
                     }
                   }
@@ -333,16 +769,47 @@
           }
         },
         "responses": {
-          "201": { "description": "Đặt hàng thành công" }
-        }
+          "201": {
+            "description": "Đặt hàng thành công"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/orders/{id}/payos-payment": {
       "post": {
-        "tags": ["Orders"],
+        "tags": [
+          "Orders"
+        ],
         "summary": "Tạo liên kết & mã QR thanh toán VietQR PayOS",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -350,7 +817,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": { "UserID": { "type": "integer", "example": 4 } }
+                "properties": {
+                  "UserID": {
+                    "type": "integer",
+                    "example": 4
+                  }
+                }
               }
             }
           }
@@ -363,10 +835,19 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "orderId": { "type": "integer" },
-                    "paymentStatus": { "type": "string", "example": "PENDING" },
-                    "checkoutUrl": { "type": "string" },
-                    "qrCode": { "type": "string" }
+                    "orderId": {
+                      "type": "integer"
+                    },
+                    "paymentStatus": {
+                      "type": "string",
+                      "example": "PENDING"
+                    },
+                    "checkoutUrl": {
+                      "type": "string"
+                    },
+                    "qrCode": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -377,16 +858,33 @@
     },
     "/orders/payos/webhook": {
       "post": {
-        "tags": ["Orders"],
+        "tags": [
+          "Orders"
+        ],
         "summary": "Webhook nhận thông báo thanh toán tự động từ PayOS",
         "responses": {
-          "200": { "description": "Xác nhận Webhook thành công" }
-        }
+          "200": {
+            "description": "Xác nhận Webhook thành công"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/auth/login": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Đăng nhập bằng số điện thoại và mật khẩu",
         "requestBody": {
           "required": true,
@@ -394,23 +892,47 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["phone", "password"],
+                "required": [
+                  "phone",
+                  "password"
+                ],
                 "properties": {
-                  "phone": { "type": "string", "example": "0909680426" },
-                  "password": { "type": "string", "example": "123456" }
+                  "phone": {
+                    "type": "string",
+                    "example": "0909680426"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "123456"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Đăng nhập thành công" }
-        }
+          "200": {
+            "description": "Đăng nhập thành công"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/auth/register": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Đăng ký tài khoản người dùng mới",
         "requestBody": {
           "required": true,
@@ -418,42 +940,108 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["phone", "password", "otp"],
+                "required": [
+                  "phone",
+                  "password",
+                  "otp"
+                ],
                 "properties": {
-                  "phone": { "type": "string", "example": "0909680426" },
-                  "password": { "type": "string", "example": "123456" },
-                  "otp": { "type": "string", "example": "123456" }
+                  "phone": {
+                    "type": "string",
+                    "example": "0909680426"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "123456"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "example": "123456"
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "201": { "description": "Đăng ký thành công" }
-        }
+          "201": {
+            "description": "Đăng ký thành công"
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/cart/{userId}": {
       "get": {
-        "tags": ["Cart"],
+        "tags": [
+          "Cart"
+        ],
         "summary": "Lấy danh sách giỏ hàng theo UserID",
         "parameters": [
-          { "name": "userId", "in": "path", "required": true, "schema": { "type": "integer" } }
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Danh sách sản phẩm trong giỏ hàng" }
+          "200": {
+            "description": "Danh sách sản phẩm trong giỏ hàng"
+          }
         }
       }
     },
     "/favorites/{userId}": {
       "get": {
-        "tags": ["Favorites"],
+        "tags": [
+          "Favorites"
+        ],
         "summary": "Lấy danh sách sản phẩm yêu thích của người dùng",
         "parameters": [
-          { "name": "userId", "in": "path", "required": true, "schema": { "type": "integer" } }
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "description": "Mã Token JWT (nếu API yêu cầu đăng nhập/quyền Admin)",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Danh sách sản phẩm yêu thích" }
+          "200": {
+            "description": "Danh sách sản phẩm yêu thích"
+          }
         }
       }
     }
@@ -463,47 +1051,155 @@
       "Product": {
         "type": "object",
         "properties": {
-          "ProductID": { "type": "integer", "example": 1 },
-          "ProductName": { "type": "string", "example": "Laptop HP Gaming VICTUS 15" },
-          "Description": { "type": "string", "example": "Core i5 13420H, 16GB, 512GB SSD, RTX 3050" },
-          "Price": { "type": "number", "example": 22490000 },
-          "DiscountPrice": { "type": "number", "example": 18990000 },
-          "StockQuantity": { "type": "integer", "example": 50 },
-          "ImageUrl": { "type": "string", "example": "https://example.com/hp-victus.jpg" },
-          "CategoryID": { "type": "integer", "example": 1 },
-          "CPU": { "type": "string", "example": "Intel Core i5-13420H" },
-          "RAM": { "type": "string", "example": "16GB DDR5" },
-          "Storage": { "type": "string", "example": "512GB SSD NVMe" },
-          "Display": { "type": "string", "example": "15.6 inch FHD 144Hz" },
-          "Series": { "type": "string", "example": "HP VICTUS" }
+          "ProductID": {
+            "type": "integer",
+            "example": 1
+          },
+          "ProductName": {
+            "type": "string",
+            "example": "Laptop HP Gaming VICTUS 15"
+          },
+          "Description": {
+            "type": "string",
+            "example": "Core i5 13420H, 16GB, 512GB SSD, RTX 3050"
+          },
+          "Price": {
+            "type": "number",
+            "example": 22490000
+          },
+          "DiscountPrice": {
+            "type": "number",
+            "example": 18990000
+          },
+          "StockQuantity": {
+            "type": "integer",
+            "example": 50
+          },
+          "ImageUrl": {
+            "type": "string",
+            "example": "https://example.com/hp-victus.jpg"
+          },
+          "CategoryID": {
+            "type": "integer",
+            "example": 1
+          },
+          "CPU": {
+            "type": "string",
+            "example": "Intel Core i5-13420H"
+          },
+          "RAM": {
+            "type": "string",
+            "example": "16GB DDR5"
+          },
+          "Storage": {
+            "type": "string",
+            "example": "512GB SSD NVMe"
+          },
+          "Display": {
+            "type": "string",
+            "example": "15.6 inch FHD 144Hz"
+          },
+          "Series": {
+            "type": "string",
+            "example": "HP VICTUS"
+          }
         }
       },
       "ProductInput": {
         "type": "object",
-        "required": ["ProductName", "Price"],
+        "required": [
+          "ProductName",
+          "Price"
+        ],
         "properties": {
-          "ProductName": { "type": "string", "example": "Laptop MSI Cyborg 15" },
-          "Description": { "type": "string", "example": "Gaming Laptop Intel Core i7 RTX 4060" },
-          "Price": { "type": "number", "example": 25990000 },
-          "DiscountPrice": { "type": "number", "example": 23490000 },
-          "StockQuantity": { "type": "integer", "example": 20 },
-          "ImageUrl": { "type": "string", "example": "https://example.com/msi.jpg" },
-          "CategoryID": { "type": "integer", "example": 1 },
-          "CPU": { "type": "string", "example": "Intel Core i7" },
-          "RAM": { "type": "string", "example": "16GB" },
-          "Storage": { "type": "string", "example": "512GB SSD" },
-          "Display": { "type": "string", "example": "15.6 inch FHD" },
-          "Series": { "type": "string", "example": "MSI Cyborg" }
+          "ProductName": {
+            "type": "string",
+            "example": "Laptop MSI Cyborg 15"
+          },
+          "Description": {
+            "type": "string",
+            "example": "Gaming Laptop Intel Core i7 RTX 4060"
+          },
+          "Price": {
+            "type": "number",
+            "example": 25990000
+          },
+          "DiscountPrice": {
+            "type": "number",
+            "example": 23490000
+          },
+          "StockQuantity": {
+            "type": "integer",
+            "example": 20
+          },
+          "ImageUrl": {
+            "type": "string",
+            "example": "https://example.com/msi.jpg"
+          },
+          "CategoryID": {
+            "type": "integer",
+            "example": 1
+          },
+          "CPU": {
+            "type": "string",
+            "example": "Intel Core i7"
+          },
+          "RAM": {
+            "type": "string",
+            "example": "16GB"
+          },
+          "Storage": {
+            "type": "string",
+            "example": "512GB SSD"
+          },
+          "Display": {
+            "type": "string",
+            "example": "15.6 inch FHD"
+          },
+          "Series": {
+            "type": "string",
+            "example": "MSI Cyborg"
+          }
         }
       },
       "Category": {
         "type": "object",
         "properties": {
-          "CategoryID": { "type": "integer", "example": 1 },
-          "CategoryName": { "type": "string", "example": "Laptop" },
-          "ImageUrl": { "type": "string", "example": "https://example.com/laptop-category.jpg" }
+          "CategoryID": {
+            "type": "integer",
+            "example": 1
+          },
+          "CategoryName": {
+            "type": "string",
+            "example": "Laptop"
+          },
+          "ImageUrl": {
+            "type": "string",
+            "example": "https://example.com/laptop-category.jpg"
+          }
         }
       }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Nhập mã JWT token (sau khi gọi API /auth/login)"
+      },
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "Xác thực tài khoản quản trị viên hệ thống (Basic Auth)"
+      }
     }
-  }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    },
+    {
+      "basicAuth": []
+    }
+  ]
 }

@@ -3,12 +3,37 @@ const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('./src/models');
 const Order = require('./src/models/Order');
 require('dotenv').config();
 
 const app = express();
+
+// Trust reverse proxy (Nginx on VPS)
+app.set('trust proxy', 1);
+
+// Chống DDOS / Flood request: tối đa 600 requests trong 1 phút cho mỗi IP
+const generalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Hệ thống phát hiện quá nhiều yêu cầu từ bạn. Vui lòng thử lại sau 1 phút.' },
+});
+app.use(generalLimiter);
+
+// Giới hạn riêng cho API xác thực/đăng nhập: tối đa 30 lần trong 1 phút
+const authLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Thao tác quá nhanh. Vui lòng thử lại sau 1 phút.' },
+});
+app.use('/api/auth', authLimiter);
+
 const allowedOrigins = (process.env.FRONTEND_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true, credentials: true }));
 app.use(express.json({ limit: '50mb' }));
@@ -39,7 +64,7 @@ app.post('/api/products/upload', upload.single('image'), (req, res) => {
 });
 
 const apiOverview = {
-  name: "MANB Computer Store API",
+  name: "DEVORA Computer Store API",
   status: "online",
   version: "1.0.0",
   timestamp: new Date().toISOString(),
@@ -59,7 +84,7 @@ const apiOverview = {
 const basicAuth = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="MANB Admin Console & Swagger Docs"');
+    res.setHeader('WWW-Authenticate', 'Basic realm="DEVORA Admin Console & Swagger Docs"');
     return res.status(401).send('Authentication required: Vui lòng đăng nhập để truy cập Admin Console và Swagger API.');
   }
 
@@ -79,7 +104,7 @@ const basicAuth = (req, res, next) => {
     // Ignore error
   }
 
-  res.setHeader('WWW-Authenticate', 'Basic realm="MANB Admin Console & Swagger Docs"');
+  res.setHeader('WWW-Authenticate', 'Basic realm="DEVORA Admin Console & Swagger Docs"');
   return res.status(401).send('Tài khoản hoặc mật khẩu không chính xác.');
 };
 
@@ -98,6 +123,36 @@ app.get(['/api/docs', '/api/swagger', '/docs', '/swagger', '/swagger.html', '/ap
 });
 app.get(['/api/swagger.json', '/swagger.json'], basicAuth, (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'swagger.json'));
+});
+app.get(['/api/logout', '/logout'], (_req, res) => {
+  res.setHeader('WWW-Authenticate', 'Basic realm="DEVORA Admin Console & Swagger Docs"');
+  res.status(401).send(`
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="utf-8">
+      <title>Đã Đăng Xuất - DEVORA</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 36px 32px; max-width: 440px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+        .icon { font-size: 48px; margin-bottom: 16px; }
+        h2 { margin: 0 0 10px; font-size: 22px; color: #fff; }
+        p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px; }
+        .btn { display: inline-block; background: #2563eb; color: #fff; text-decoration: none; font-weight: bold; padding: 12px 24px; border-radius: 12px; font-size: 14px; transition: 0.2s; }
+        .btn:hover { background: #1d4ed8; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon">🔒</div>
+        <h2>Đã Đăng Xuất Thành Công</h2>
+        <p>Phiên bảo mật đã được xóa khỏi trình duyệt. Bất kỳ ai truy cập lại trang Swagger hay Console đều phải nhập chính xác tài khoản và mật khẩu quản trị viên.</p>
+        <a href="/api/swagger" class="btn">Đăng Nhập Lại Vào Swagger</a>
+      </div>
+    </body>
+    </html>
+  `);
 });
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -155,8 +210,30 @@ async function ensureOrderInventoryColumn() {
       CarrierName: { type: DataTypes.STRING(100), allowNull: true },
       TrackingNumber: { type: DataTypes.STRING(150), allowNull: true },
       EstimatedDelivery: { type: DataTypes.DATEONLY, allowNull: true },
+      RefundRequestAt: { type: DataTypes.DATE, allowNull: true },
+      RefundBankName: { type: DataTypes.STRING(100), allowNull: true },
+      RefundBankAccount: { type: DataTypes.STRING(100), allowNull: true },
+      RefundBankHolder: { type: DataTypes.STRING(150), allowNull: true },
+      RefundPhone: { type: DataTypes.STRING(50), allowNull: true },
+      RefundReason: { type: DataTypes.TEXT, allowNull: true },
+      RefundStatus: { type: DataTypes.STRING(50), allowNull: true },
+      RefundApprovedAt: { type: DataTypes.DATE, allowNull: true },
     })) {
       if (!columns[name]) await queryInterface.addColumn(tableName, name, definition);
+    }
+
+    const { Promotion } = require('./src/models');
+    const promoTable = Promotion.getTableName();
+    const promoCols = await queryInterface.describeTable(promoTable);
+    for (const [name, definition] of Object.entries({
+      LinkUrl: { type: DataTypes.STRING, allowNull: true },
+      DiscountPercent: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+      ProductIDs: { type: DataTypes.TEXT, allowNull: true },
+      IsActive: { type: DataTypes.BOOLEAN, defaultValue: true },
+      StartDate: { type: DataTypes.DATEONLY, allowNull: true },
+      EndDate: { type: DataTypes.DATEONLY, allowNull: true },
+    })) {
+      if (!promoCols[name]) await queryInterface.addColumn(promoTable, name, definition);
     }
   } catch (err) {
     console.warn('ensureOrderInventoryColumn warning:', err.message);

@@ -77,10 +77,20 @@ exports.update = async (req, res) => {
     // Cập nhật các trường thông tin cá nhân khác
     if (fields.FullName !== undefined) user.FullName = fields.FullName;
     if (fields.Email !== undefined) user.Email = fields.Email;
+    if (fields.Phone !== undefined) user.Phone = fields.Phone;
     if (fields.Address !== undefined) user.Address = fields.Address;
     if (fields.Gender !== undefined) user.Gender = fields.Gender;
     if (fields.Birthday !== undefined) user.Birthday = fields.Birthday;
     if (fields.Avatar !== undefined) user.Avatar = fields.Avatar;
+    if (fields.Username !== undefined) user.Username = fields.Username;
+    if (fields.Bio !== undefined) user.Bio = fields.Bio;
+
+    // Cập nhật quyền (Role) hỗ trợ cả Role và role, Admin hoặc Customer
+    const rawRole = fields.Role !== undefined ? fields.Role : fields.role;
+    if (rawRole !== undefined && rawRole !== null && String(rawRole).trim() !== '') {
+      const cleanRole = String(rawRole).trim();
+      user.Role = cleanRole.toLowerCase() === 'admin' ? 'Admin' : 'Customer';
+    }
 
     await user.save();
 
@@ -97,17 +107,24 @@ exports.update = async (req, res) => {
 exports.updateRole = async (req, res) => {
   try {
     const { id } = req.params;
-    const { role } = req.body;
+    const rawRole = req.body.role !== undefined ? req.body.role : req.body.Role;
 
     const user = await User.findByPk(id);
     if (!user) {
       return res.status(404).json({ error: 'Không tìm thấy người dùng' });
     }
 
-    user.Role = role;
+    if (!rawRole || String(rawRole).trim() === '') {
+      return res.status(400).json({ error: 'Vui lòng cung cấp role (Admin hoặc Customer)' });
+    }
+
+    user.Role = String(rawRole).trim().toLowerCase() === 'admin' ? 'Admin' : 'Customer';
     await user.save();
 
-    res.status(200).json({ message: 'Cập nhật quyền thành công', user });
+    const safeUser = user.toJSON();
+    delete safeUser.PasswordHash;
+
+    res.status(200).json({ message: 'Cập nhật quyền thành công', user: safeUser });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

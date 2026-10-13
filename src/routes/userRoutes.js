@@ -32,12 +32,14 @@ function parseAvatar(req, res, next) {
   });
 }
 
-router.get('/', c.getAll);
-router.post('/', c.create);
-router.put('/:id/profile', parseAvatar, c.updateProfile);
-router.put('/:id', c.update);
-router.put('/:id/role', c.updateRole);
-router.delete('/:id', c.delete);
+const { authenticateToken, requireAdmin } = require('../middlewares/authMiddleware');
+
+router.get('/', authenticateToken, requireAdmin, c.getAll);
+router.post('/', authenticateToken, requireAdmin, c.create);
+router.put('/:id/profile', authenticateToken, parseAvatar, c.updateProfile);
+router.put('/:id', authenticateToken, c.update);
+router.put('/:id/role', authenticateToken, requireAdmin, c.updateRole);
+router.delete('/:id', authenticateToken, requireAdmin, c.delete);
 router.post('/check-phone', userController.checkPhone);
 
 module.exports = router;

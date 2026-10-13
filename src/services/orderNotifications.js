@@ -14,6 +14,8 @@ const STATUS_COPY = {
   delivered: ['Đơn hàng đã giao', 'Đơn hàng đã được giao hoàn tất'],
   cancelled: ['Đơn hàng đã hủy', 'Đơn hàng đã bị hủy'],
   canceled: ['Đơn hàng đã hủy', 'Đơn hàng đã bị hủy'],
+  refundpending: ['Chờ hoàn tiền', 'Yêu cầu hoàn tiền của bạn đang được xử lý'],
+  'pending refund': ['Chờ hoàn tiền', 'Yêu cầu hoàn tiền của bạn đang được xử lý'],
 };
 
 async function createOrderNotification({ userId, orderId, eventKey, type, title, message }) {
@@ -68,8 +70,8 @@ async function notifyOrderStatus(order, status) {
     if (user?.Email) {
       const name = String(user.FullName || 'bạn').replace(/[<>]/g, '');
       const label = String(status || '').replace(/[<>]/g, '');
-      await sendEmail(user.Email, label, `Cập nhật đơn hàng #${id} MANB SHOP`,
-        `<p>Xin chào ${name},</p><p>Đơn hàng <strong>#${id}</strong> đã chuyển sang trạng thái: <strong>${label}</strong>.</p><p>Đăng nhập MANB SHOP để xem chi tiết đơn hàng.</p>`);
+      await sendEmail(user.Email, label, `Cập nhật đơn hàng #${id} DEVORA`,
+        `<p>Xin chào ${name},</p><p>Đơn hàng <strong>#${id}</strong> đã chuyển sang trạng thái: <strong>${label}</strong>.</p><p>Đăng nhập DEVORA để xem chi tiết đơn hàng.</p>`);
     }
   } catch (error) {
     console.error('Order status email failed:', error.message);

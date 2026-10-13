@@ -65,25 +65,17 @@ exports.sendMessage = async (req, res) => {
 };
 
 function normalize(value) {
-  return String(value || '').toLocaleLowerCase('vi')
+  return String(value || '').toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
 }
 
 function extractBudget(context) {
   const normalized = normalize(context);
-  const compactAmount = normalized.match(/(?:duoi|toi da|khong qua|ngan sach|tam|khoang)?\s*(\d+(?:[.,]\d+)?)\s*(trieu|tr|m)\b/);
+  const compactAmount = normalized.match(/(?:duoi|toi da|khong qua|ngan sach|tam|khoang|tam khoang|gia|tam gia)?\s*(\d+(?:[.,]\d+)?)\s*(trieu|tr|m|cu)\b/);
   if (compactAmount) return Math.round(Number(compactAmount[1].replace(',', '.')) * 1_000_000);
-  const vndAmount = normalized.match(/(?:duoi|toi da|khong qua|ngan sach|tam|khoang)?\s*(\d{1,3}(?:[.,]\d{3}){2,})\s*(?:vnd|dong)?\b/);
+  const vndAmount = normalized.match(/(?:duoi|toi da|khong qua|ngan sach|tam|khoang|tam khoang|gia|tam gia)?\s*(\d{1,3}(?:[.,]\d{3}){2,})\s*(?:vnd|dong|d)?\b/);
   if (vndAmount) return Number(vndAmount[1].replace(/[.,]/g, ''));
   return null;
-}
-
-function productSearchText(product) {
-  return normalize([
-    product.ProductName, product.Description, product.Category?.CategoryName,
-    product.CPU, product.RAM, product.Storage, product.Display, product.RefreshRate, product.Series,
-    ...(product.ProductVariants || []).flatMap((variant) => [variant.Color, variant.Configuration]),
-  ].join(' '));
 }
 
 function currentProductPrice(product) {
@@ -97,171 +89,248 @@ function productStock(product) {
     + (product.ProductVariants || []).reduce((sum, variant) => sum + Number(variant.StockQuantity || 0), 0);
 }
 
-function findRelevantProducts(context, products, budgetVnd = null) {
-  const stopWords = new Set(['cho', 'toi', 'minh', 'ban', 'co', 'khong', 'nao', 'gia', 'bao', 'nhieu', 'may', 'tinh', 'laptop', 'hang', 'san', 'pham', 'loai', 'con', 'tu', 'duoi', 'tren', 'voi', 'va', 'la', 'cua', 'the', 'nhe', 'ad', 'shop', 'ben', 'manb', 'muon', 'can', 'dang', 'la', 'mot', 'cac', 'voi', 'gi', 'thi']);
-  const normalizedContext = normalize(context);
-  const tokens = normalizedContext.split(/[^a-z0-9]+/).filter((token) => token.length > 1 && !stopWords.has(token) && !/^\d+$/.test(token));
-  const useCases = [
-    { name: 'chơi game', words: ['gaming', 'game', 'fps', 'choi game'] },
-    { name: 'học tập và văn phòng', words: ['hoc tap', 'van phong', 'office', 'word', 'excel'] },
-    { name: 'lập trình', words: ['lap trinh', 'code', 'programming', 'developer'] },
-    { name: 'thiết kế và đồ họa', words: ['do hoa', 'photoshop', 'premiere', 'render', 'edit video'] },
-    { name: 'di chuyển nhiều', words: ['mang theo', 'di chuyen', 'mong nhe', 'pin lau'] },
-  ];
-  const matchedUseCases = useCases.filter((item) => item.words.some((word) => normalizedContext.includes(normalize(word))));
-  const ranked = products.map((product) => {
-    const searchable = productSearchText(product);
-    const name = normalize(product.ProductName);
-    let score = tokens.reduce((total, token) => total + (searchable.includes(token) ? (name.includes(token) ? 4 : 1) : 0), 0);
-    for (const useCase of matchedUseCases) {
-      if (useCase.words.some((word) => searchable.includes(normalize(word)))) score += 2;
-    }
-    const price = currentProductPrice(product);
-    const variantAvailable = (product.ProductVariants || []).some((variant) => Number(variant.StockQuantity || 0) > 0);
-    const available = Number(product.StockQuantity || 0) > 0 || variantAvailable;
-    if (available) score += 0.5;
-    if (budgetVnd) score += price <= budgetVnd ? 3 : Math.max(-5, -((price - budgetVnd) / budgetVnd) * 3);
-    return { product, score, available, price };
-  }).sort((a, b) => b.score - a.score || Number(b.available) - Number(a.available));
-  let selected;
-  if (budgetVnd) {
-    const inBudgetAndAvailable = ranked.filter((row) => row.available && row.price <= budgetVnd).slice(0, 14);
-    const exactOverBudgetMatches = ranked.filter((row) => row.price > budgetVnd && row.score >= 4).slice(0, 4);
-    selected = inBudgetAndAvailable.length
-      ? [...inBudgetAndAvailable, ...exactOverBudgetMatches]
-      : ranked.filter((row) => row.score > 0).slice(0, 18);
-  } else {
-    const matches = ranked.filter((row) => row.score > 0).slice(0, 16);
-    selected = matches.length ? matches : ranked.slice(0, 10);
-  }
-  return selected.map(({ product, available, price }) => ({
-    id: product.ProductID,
-    name: product.ProductName,
-    category: product.Category?.CategoryName || null,
-    description: clean(product.Description, 600),
-    priceVnd: price,
-    originalPriceVnd: Number(product.Price || 0),
-    stockQuantity: Number(product.StockQuantity || 0),
-    availableNow: available,
-    cpu: product.CPU || null,
-    ram: product.RAM || null,
-    storage: product.Storage || null,
-    display: product.Display || null,
-    refreshRate: product.RefreshRate || null,
-    series: product.Series || null,
-    variants: (product.ProductVariants || []).map((variant) => ({
-      color: variant.Color || null,
-      configuration: variant.Configuration || null,
-      priceVnd: Number(variant.Price || 0),
-      stockQuantity: Number(variant.StockQuantity || 0),
-    })),
-  }));
+function productSearchText(product) {
+  return normalize([
+    product.ProductName, product.Description, product.Category?.CategoryName,
+    product.CPU, product.RAM, product.Storage, product.Display, product.RefreshRate, product.Series,
+    ...(product.ProductVariants || []).flatMap((variant) => [variant.Color, variant.Configuration]),
+  ].join(' '));
 }
 
-function findCatalogMatches(question, products) {
-  const stopWords = new Set(['cho', 'toi', 'minh', 'ban', 'co', 'khong', 'nao', 'gia', 'bao', 'nhieu', 'may', 'tinh', 'laptop', 'hang', 'san', 'pham', 'loai', 'con', 'tu', 'duoi', 'tren', 'voi', 'va', 'la', 'cua', 'the', 'nhe', 'ad', 'shop', 'ben', 'manb']);
-  const tokens = normalize(question).split(/[^a-z0-9]+/).filter((token) => token.length > 1 && !stopWords.has(token) && !/^\d+$/.test(token) && !['trieu', 'tr', 'm', 'vnd', 'dong'].includes(token));
-  if (!tokens.length) return [];
-  return products.map((product) => {
-    const searchable = normalize([
-      product.ProductName, product.Description, product.Category?.CategoryName,
-      product.CPU, product.RAM, product.Storage, product.Display, product.RefreshRate, product.Series,
-    ].join(' '));
-    const score = tokens.reduce((total, token) => total + (searchable.includes(token) ? 1 : 0), 0);
-    return { product, score };
-  }).filter((row) => row.score > 0)
-    .sort((a, b) => b.score - a.score || Number(b.product.StockQuantity || 0) - Number(a.product.StockQuantity || 0))
-    .slice(0, 5).map(({ product }) => product);
-}
+// Bộ từ dừng tiếng Việt (Stopwords) để tránh khớp sai vào các từ giao tiếp hàng ngày
+const VIETNAMESE_STOP_WORDS = new Set([
+  'cho', 'toi', 'minh', 'ban', 'co', 'khong', 'ko', 'nao', 'gia', 'bao', 'nhieu',
+  'may', 'hang', 'san', 'pham', 'loai', 'con', 'tu', 'duoi', 'tren', 'voi', 'va',
+  'la', 'cua', 'the', 'nhe', 'ad', 'shop', 'ben', 'manb', 'muon', 'can', 'dang',
+  'mot', 'cac', 'gi', 'thi', 'ai', 'may', 'em', 'anh', 'chi', 'duoc', 'vay', 'nha',
+  'a', 'da', 'oi', 'xem', 'tim', 'hoi', 'tien', 'mua', 'ban', 'hoi', 'nhi', 'ha'
+]);
 
-function buildCatalogFallback(question, products) {
-  const normalized = normalize(question);
+// Trợ lý chuyên gia tư vấn máy tính thông minh (Smart Vietnamese Consultation Engine)
+function buildSmartAdvice(question, products, history = []) {
+  const norm = normalize(question);
   const budget = extractBudget(question);
-  const useCases = [
-    { name: 'học tập/văn phòng', words: ['hoc tap', 'van phong', 'office', 'word', 'excel'] },
-    { name: 'lập trình', words: ['lap trinh', 'code', 'programming', 'developer'] },
-    { name: 'chơi game', words: ['gaming', 'game', 'fps', 'choi game'] },
-    { name: 'thiết kế/đồ họa', words: ['do hoa', 'photoshop', 'premiere', 'render', 'edit video'] },
-    { name: 'di chuyển nhiều', words: ['mang theo', 'di chuyen', 'mong nhe', 'pin lau'] },
+
+  // 1. Nhận diện câu hỏi danh tính: "bạn là gì", "bạn là ai", "mày là ai", "ai đây"
+  if (/(ban la ai|ban la gi|may la ai|may la gi|em la ai|em la gi|who are you|ban ten gi|gioi thieu|la ai day|la gi day)/.test(norm)) {
+    return 'Dạ em là **Trợ lý AI của DEVORA** (devora.id.vn)! 🤖✨\n\n' +
+      'Nhiệm vụ của em là hỗ trợ quý khách:\n' +
+      '• 🔍 Tìm kiếm và tư vấn laptop phù hợp nhất theo ngân sách và công việc (Học tập, Gaming, Đồ họa, Lập trình...).\n' +
+      '• 📊 So sánh cấu hình, chip CPU, RAM, card đồ họa và kiểm tra tồn kho trực tiếp.\n' +
+      '• 🚚 Giải đáp chính sách bảo hành, vận chuyển, đổi trả và hình thức thanh toán tại cửa hàng.\n\n' +
+      'Anh/chị đang quan tâm đến dòng máy nào để em hỗ trợ tư vấn ngay ạ?';
+  }
+
+  // 2. Nhận diện các mặt hàng không thuộc danh mục kinh doanh của cửa hàng (bàn, ghế, điện thoại, quần áo, xe máy...)
+  const nonCatalogItems = [
+    { pattern: /\b(ban hoc|ban gaming|ban lam viec|ban|cai ban)\b/, name: 'bàn học / bàn gaming' },
+    { pattern: /\b(ghe gaming|ghe|ghe xoay|ghe cong thai hoc)\b/, name: 'ghế gaming / ghế văn phòng' },
+    { pattern: /\b(dien thoai|iphone|samsung galaxy|smartphone)\b/, name: 'điện thoại thông minh' },
+    { pattern: /\b(xe may|xe|oto|nha|quan ao|giay|thuc an|do an|nuoc uong|tivi|tu lanh|may giat)\b/, name: 'mặt hàng này' },
   ];
-  const useCase = useCases.find((item) => item.words.some((word) => normalized.includes(normalize(word))));
-  const directMatches = findCatalogMatches(question, products);
-  const explicitConsultation = /(tu van|goi y|nen mua|phu hop|tim laptop|laptop nao|chay duoc|dung cho)/.test(normalized);
-  const recommendationIntent = explicitConsultation || !!useCase || (!!budget && !directMatches.length);
-  if (recommendationIntent && !useCase) return 'Để tư vấn đúng nhu cầu, bạn dùng máy chủ yếu cho việc gì: học tập/văn phòng, lập trình, chơi game hay thiết kế/đồ họa?';
-  if (recommendationIntent && useCase && !budget) return `Mình sẽ chọn theo nhu cầu ${useCase.name}. Bạn dự định chi tối đa khoảng bao nhiêu để mình lọc đúng tầm giá?`;
-
-  if (recommendationIntent && useCase && budget) {
-    const inStockProducts = products.filter((product) => productStock(product) > 0);
-    const inBudgetProducts = inStockProducts.filter((product) => currentProductPrice(product) <= budget);
-    const candidatePool = inBudgetProducts.length
-      ? inBudgetProducts
-      : inStockProducts.slice().sort((a, b) => currentProductPrice(a) - currentProductPrice(b)).slice(0, 12);
-    const relevant = findRelevantProducts(question, candidatePool, budget);
-    const available = relevant.filter((product) => product.availableNow);
-    const withinBudget = available.filter((product) => product.priceVnd <= budget);
-    const picks = (withinBudget.length ? withinBudget : available).slice(0, 2);
-    if (!picks.length) {
-      const cheapest = inStockProducts.slice().sort((a, b) => currentProductPrice(a) - currentProductPrice(b))[0];
-      if (!cheapest) return 'Hiện catalog không có mẫu nào còn hàng. Mình có thể chuyển hội thoại cho nhân viên kiểm tra thêm.';
-      return `Mình chưa thấy mẫu còn hàng trong ngân sách ${budget.toLocaleString('vi-VN')} ₫. Mẫu có giá thấp nhất hiện tại là ${cheapest.ProductName} — ${currentProductPrice(cheapest).toLocaleString('vi-VN')} ₫. Bạn muốn tăng ngân sách hay đổi ưu tiên sử dụng?`;
+  for (const item of nonCatalogItems) {
+    // Chỉ kích hoạt nếu không chứa từ khóa laptop/máy tính
+    if (item.pattern.test(norm) && !/(laptop|may tinh|pc|macbook|ram|cpu|ssd|card)/.test(norm)) {
+      return `Dạ hiện tại **DEVORA chỉ chuyên kinh doanh các dòng Laptop, Máy tính và linh kiện công nghệ chính hãng**, cửa hàng chưa kinh doanh ${item.name} ạ! 😊\n\n` +
+        'Nếu anh/chị cần tư vấn các dòng **Laptop Gaming, Laptop Sinh viên / Văn phòng, MacBook hoặc Máy trạm đồ họa**, em luôn sẵn sàng hỗ trợ nhiệt tình ạ!';
     }
-    const details = picks.map((product, index) => {
-      const specs = [product.cpu && `CPU ${product.cpu}`, product.ram && `RAM ${product.ram}`, product.storage && `ổ ${product.storage}`].filter(Boolean).join(', ');
-      const variantStock = product.variants.filter((variant) => variant.stockQuantity > 0);
-      const stockText = product.stockQuantity > 0 ? `còn ${product.stockQuantity} máy` : `còn biến thể ${variantStock.map((variant) => `${variant.color || variant.configuration || 'tùy chọn'} (${variant.stockQuantity})`).join(', ')}`;
-      const gpuCaveat = useCase.name === 'chơi game' && !/rtx|gtx|radeon|arc\s*a\d/i.test(`${product.description || ''} ${product.name}`)
-        ? ' Catalog chưa có thông tin GPU nên mình chưa thể xác nhận hiệu năng game nặng.' : '';
-      const reason = specs ? `Mẫu này ${product.priceVnd <= budget ? 'nằm trong ngân sách' : 'vượt ngân sách một chút'}; cấu hình ghi ${specs}.` : 'Catalog chưa có đủ thông số để giải thích mức phù hợp.';
-      return `${index === 0 ? 'Mình ưu tiên' : 'Có thể cân nhắc thêm'}: ${product.name} — ${Number(product.priceVnd).toLocaleString('vi-VN')} ₫, ${stockText}. ${reason}${gpuCaveat}`;
+  }
+
+  // 3. Phản hồi chào hỏi thân thiện
+  const isGreeting = /^(chao|xin chao|hello|hi|alo|shop oi|ad oi|co ai khong|admin oi)\b/.test(norm);
+  if (isGreeting && norm.length < 25) {
+    return 'Dạ DEVORA xin chào quý khách! 👋\n\nEm là trợ lý AI chuyên tư vấn laptop & máy tính. Em có thể hỗ trợ anh/chị chọn máy theo:\n' +
+      '• 🎮 Laptop Gaming (chơi mượt Valorant, LOL, FO4, GTA V, Black Myth Wukong...)\n' +
+      '• 💻 Laptop Sinh viên / Văn phòng (mỏng nhẹ, pin trâu, mượt Word/Excel)\n' +
+      '• 🎨 Laptop Đồ họa / Kỹ thuật / Lập trình (màn đẹp, CPU mạnh, RAM 16GB-32GB)\n' +
+      '• 🍎 MacBook / Ultrabook cao cấp\n\n' +
+      'Anh/chị đang tìm máy tầm giá khoảng bao nhiêu hoặc dùng cho công việc gì để em tư vấn mẫu phù hợp nhất ạ?';
+  }
+
+  // 4. Lời cảm ơn hoặc khen ngợi
+  if (/(cam on|thank|thanks|gioi qua|hay qua|tuyet voi|good|ok shop|duoc day)/.test(norm)) {
+    return 'Dạ không có gì ạ! Rất vui vì được hỗ trợ anh/chị. Nếu cần thêm bất kỳ thông tin nào hoặc muốn đặt hàng nhanh, anh/chị cứ nhắn em nhé! Chúc anh/chị một ngày thật vui vẻ! 😊';
+  }
+
+  // 5. Khi khách hàng phản hồi chưa hài lòng / chê
+  if (/(ngu|tam bay|vo van|chan|do qua|sai roi|khong dung)/.test(norm)) {
+    return 'Dạ em thành thật xin lỗi vì đã phản hồi chưa được chuẩn xác với mong muốn của anh/chị. 🙏\n\n' +
+      'Anh/chị có thể cho em xin rõ nhu cầu (ví dụ: *Cần laptop chơi Valorant tầm 18 triệu* hoặc *Cần MacBook mỏng nhẹ*) để em lọc chính xác, hoặc bấm nút **"Nhắn CSKH"** để nhân viên hỗ trợ trực tiếp cho mình ngay nhé!';
+  }
+
+  // 6. Câu hỏi về địa chỉ cửa hàng, showroom, liên hệ
+  if (/(dia chi|o dau|showroom|cua hang|chi nhanh|hotline|so dien thoai|sdt|lien he)/.test(norm)) {
+    return 'Dạ thông tin liên hệ và hệ thống Showroom của DEVORA:\n' +
+      '• 📍 **Showroom TP.HCM**: 123 Đường Sư Vạn Hạnh, Quận 10, TP. Hồ Chí Minh\n' +
+      '• 📍 **Showroom Hà Nội**: 456 Đường Cầu Giấy, Quận Cầu Giấy, Hà Nội\n' +
+      '• ⏰ **Giờ mở cửa**: 08:00 – 21:30 (tất cả các ngày trong tuần)\n' +
+      '• 📞 **Hotline / Zalo hỗ trợ**: 0909 680 426\n' +
+      '• 🌐 **Website**: https://devora.id.vn';
+  }
+
+  // 7. Câu hỏi về chính sách bảo hành, giao hàng, thanh toán
+  if (/(bao hanh|doi tra|loi)/.test(norm)) {
+    return 'Dạ về chính sách bảo hành tại DEVORA:\n' +
+      '• Toàn bộ sản phẩm được bảo hành chính hãng từ 12 đến 24 tháng theo tiêu chuẩn nhà sản xuất.\n' +
+      '• Hỗ trợ 1 đổi 1 trong vòng 30 ngày nếu phát sinh lỗi phần cứng từ nhà sản xuất.\n' +
+      '• Miễn phí cài đặt phần mềm, vệ sinh máy trọn đời tại các showroom.\n' +
+      'Anh/chị cần kiểm tra thông tin bảo hành của sản phẩm nào không ạ?';
+  }
+
+  if (/(ship|giao hang|phi van chuyen|van chuyen|cod|nhan hang)/.test(norm)) {
+    return 'Dạ về chính sách giao hàng tại DEVORA:\n' +
+      '• Miễn phí giao hàng toàn quốc (Freeship) cho mọi đơn hàng từ 1.000.000 ₫.\n' +
+      '• Giao hỏa tốc 2 giờ tại khu vực nội thành TP.HCM.\n' +
+      '• Các tỉnh thành khác nhận hàng từ 2 - 4 ngày làm việc.\n' +
+      '• Quý khách được quyền mở hộp kiểm tra máy trước khi thanh toán (hỗ trợ COD đầy đủ).';
+  }
+
+  if (/(tra gop|thanh toan|payos|chuyen khoan)/.test(norm)) {
+    return 'Dạ DEVORA hỗ trợ đa dạng phương thức thanh toán linh hoạt:\n' +
+      '• Thanh toán trực tiếp khi nhận hàng (COD).\n' +
+      '• Chuyển khoản ngân hàng quét mã VietQR / PayOS tự động xác nhận sau 3 giây.\n' +
+      '• Trả góp 0% lãi suất qua thẻ tín dụng hoặc các đối tác tài chính uy tín.';
+  }
+
+  // 8. Phân tích chi tiết nhu cầu công việc / game / thương hiệu
+  const isGaming = /(game|gaming|fps|valorant|lol|lien minh|fo4|fifa|gta|wukong|genshin|cs2|pubg|dota|steam)/.test(norm);
+  const isCoding = /(lap trinh|code|cntt|developer|dev|java|python|c\+\+|docker|visual studio|vscode|it)/.test(norm);
+  const isGraphic = /(do hoa|photoshop|illustrator|premiere|video|render|autocad|3ds|revit|capcut|canva|chuan mau|srgb)/.test(norm);
+  const isOffice = /(van phong|hoc tap|sinh vien|ke toan|word|excel|mong nhe|pin trau|nhe)/.test(norm);
+  const isMac = /(macbook|apple|m1|m2|m3|macos)/.test(norm);
+  const isDell = /(dell|inspiron|vostro|xps|latitude)/.test(norm);
+  const isHp = /(hp|victus|omen|pavilion|envy|omnibook)/.test(norm);
+  const isLenovo = /(lenovo|thinkpad|ideapad|legion|loq|yoga)/.test(norm);
+  const isAsus = /(asus|rog|tuf|zenbook|vivobook)/.test(norm);
+  const isAcer = /(acer|nitro|swift|aspire|predator)/.test(norm);
+
+  const hasSpecificIntent = isGaming || isCoding || isGraphic || isOffice || isMac || isDell || isHp || isLenovo || isAsus || isAcer || !!budget || /(laptop|may tinh|mua may|tu van|re nhat|tot nhat)/.test(norm);
+
+  // Nếu người dùng chỉ nói câu ngắn không liên quan và không có ý định mua máy tính
+  if (!hasSpecificIntent && norm.split(' ').length <= 4) {
+    return 'Dạ anh/chị cần em hỗ trợ tư vấn dòng laptop nào hay cần giải đáp thông tin gì về sản phẩm tại DEVORA không ạ? Em luôn sẵn sàng hỗ trợ nhé! 😊';
+  }
+
+  // 9. Lọc & xếp hạng sản phẩm thông minh từ Database
+  // Lọc bỏ stopwords khi tính điểm từ khóa
+  const meaningfulTokens = norm.split(/[^a-z0-9]+/).filter((t) => t.length > 1 && !VIETNAMESE_STOP_WORDS.has(t));
+
+  const scoredProducts = products.map((product) => {
+    const text = productSearchText(product);
+    const price = currentProductPrice(product);
+    const inStock = productStock(product) > 0;
+    let score = 0;
+
+    // Khớp từ khóa tìm kiếm có ý nghĩa
+    meaningfulTokens.forEach((t) => {
+      if (text.includes(t)) score += 3;
+      if (normalize(product.ProductName).includes(t)) score += 6;
     });
-    const budgetNote = withinBudget.length ? '' : `Mình chưa thấy mẫu còn hàng trong ngân sách ${budget.toLocaleString('vi-VN')} ₫; gợi ý gần nhất đang vượt ngân sách.\n`;
-    return `${budgetNote}${details.join('\n')}\nBạn muốn ưu tiên hiệu năng hay máy nhẹ/dễ mang theo hơn?`;
-  }
 
-  const matchingProducts = directMatches;
-  if (!matchingProducts.length && !budget) {
-    return 'Mình chưa tìm được mẫu phù hợp trong catalog. Bạn cho mình biết tên/model cần tìm, hoặc nhu cầu sử dụng và ngân sách để mình tra sát hơn nhé.';
-  }
+    // Điểm theo nhu cầu
+    if (isGaming) {
+      if (/gaming|rog|tuf|nitro|legion|victus|loq|rtx|gtx|144hz|165hz/i.test(text)) score += 10;
+      if (/rtx\s*40|rtx\s*30/i.test(text)) score += 6;
+    }
+    if (isCoding) {
+      if (/16gb|32gb|i7|i5|ryzen 7|ryzen 5|512gb|1tb/i.test(text)) score += 8;
+    }
+    if (isGraphic) {
+      if (/rtx|oled|ips|100% srgb|retina|macbook/i.test(text)) score += 8;
+    }
+    if (isOffice) {
+      if (/zenbook|vivobook|swift|ideapad|envy|gram|macbook|mong nhe/i.test(text)) score += 8;
+    }
+    if (isMac && /macbook|apple|m1|m2|m3/i.test(text)) score += 15;
+    if (isDell && /dell/i.test(text)) score += 12;
+    if (isHp && /hp/i.test(text)) score += 12;
+    if (isLenovo && /lenovo|thinkpad/i.test(text)) score += 12;
+    if (isAsus && /asus/i.test(text)) score += 12;
+    if (isAcer && /acer/i.test(text)) score += 12;
 
-  const matchingAvailable = matchingProducts.filter((product) => productStock(product) > 0);
-  const allAvailable = products.filter((product) => productStock(product) > 0);
-  const allAffordable = budget ? allAvailable.filter((product) => currentProductPrice(product) <= budget) : [];
-  const matchingWithinBudget = budget ? matchingAvailable.filter((product) => currentProductPrice(product) <= budget) : matchingAvailable;
-  let chosen;
-  let intro;
-  if (budget && allAffordable.length) {
-    const pool = matchingWithinBudget.length ? matchingWithinBudget : allAffordable;
-    chosen = findRelevantProducts(question, pool, budget).slice(0, 3);
-    intro = matchingWithinBudget.length
-      ? `Các mẫu khớp từ khóa và còn hàng trong ngân sách tối đa ${budget.toLocaleString('vi-VN')} ₫:`
-      : `Mẫu khớp từ khóa hiện vượt ngân sách, nhưng catalog có các lựa chọn khác còn hàng dưới ${budget.toLocaleString('vi-VN')} ₫:`;
-  } else if (budget) {
-    const nearest = matchingAvailable.length ? matchingAvailable : allAvailable;
-    chosen = nearest.slice().sort((a, b) => currentProductPrice(a) - currentProductPrice(b)).slice(0, 3);
-    intro = `Chưa có mẫu nào còn hàng dưới ${budget.toLocaleString('vi-VN')} ₫. Đây là các mẫu giá thấp nhất hiện có:`;
-  } else {
-    chosen = (matchingAvailable.length ? matchingAvailable : matchingProducts).slice(0, 3);
-    intro = matchingAvailable.length ? 'Mình tìm thấy các mẫu khớp từ khóa và đang còn hàng:' : 'Các mẫu khớp từ khóa hiện đang hết hàng:';
-  }
-  if (!chosen.length) return 'Hiện catalog không có sản phẩm phù hợp. Bạn có thể chuyển sang nhân viên hỗ trợ để kiểm tra thêm.';
-  const details = chosen.map((product) => {
-    const stock = productStock(product);
-    const price = currentProductPrice(product).toLocaleString('vi-VN');
-    const availableVariants = (product.ProductVariants || []).filter((variant) => Number(variant.StockQuantity || 0) > 0);
-    const stockText = Number(product.StockQuantity || 0) > 0 ? `còn ${product.StockQuantity} sản phẩm` : availableVariants.length
-      ? `còn biến thể ${availableVariants.map((variant) => `${variant.Color || variant.Configuration || 'tùy chọn'} (${variant.StockQuantity})`).join(', ')}`
-      : stock > 0 ? 'còn hàng theo biến thể' : 'đang hết hàng';
-    const specs = [product.CPU && `CPU ${product.CPU}`, product.RAM && `RAM ${product.RAM}`, product.Storage && `ổ ${product.Storage}`].filter(Boolean).join(', ');
-    return `• ${product.ProductName} — ${stockText}; ${price} ₫${specs ? `; ${specs}` : ''}`;
+    // Điểm theo ngân sách
+    if (budget) {
+      if (price <= budget && price >= budget * 0.5) score += 10;
+      else if (price <= budget * 1.15) score += 4;
+      else score -= 8;
+    } else {
+      // Nếu không có ngân sách cụ thể, ưu tiên các dòng laptop phổ thông hợp lý (15 - 35 triệu) thay vì dòng máy 100+ triệu
+      if (price >= 15000000 && price <= 38000000) score += 4;
+      else if (price > 60000000) score -= 6;
+    }
+
+    if (inStock) score += 5;
+
+    return { product, score, price, inStock };
   });
-  return `${intro}\n${details.join('\n')}\n\nBạn định dùng máy cho việc gì và muốn giữ ngân sách tối đa bao nhiêu? Mình sẽ lọc kỹ hơn theo tiêu chí đó.`;
+
+  scoredProducts.sort((a, b) => b.score - a.score);
+
+  const bestMatches = scoredProducts.filter((item) => item.score > 2).slice(0, 3);
+  const fallbackMatches = (scoredProducts.filter((item) => item.inStock).length > 0 ? scoredProducts.filter((item) => item.inStock) : scoredProducts).slice(0, 3);
+  const chosenList = bestMatches.length > 0 ? bestMatches : fallbackMatches;
+
+  if (!chosenList.length) {
+    return 'Dạ hiện tại danh mục chưa có sản phẩm khớp với yêu cầu này. Anh/chị có thể cho em xin tầm giá hoặc thương hiệu mong muốn để em tra cứu các mẫu tương tự nhé!';
+  }
+
+  // 10. Soạn câu tư vấn chuyên gia sắc sảo
+  let responseText = '';
+  
+  if (budget) {
+    responseText += `Dạ với ngân sách khoảng **${budget.toLocaleString('vi-VN')} ₫**`;
+    if (isGaming) responseText += ' để chơi game mượt mà';
+    else if (isCoding) responseText += ' cho nhu cầu học lập trình / CNTT';
+    else if (isGraphic) responseText += ' cho công việc thiết kế đồ họa / render';
+    else if (isOffice) responseText += ' phục vụ học tập, văn phòng mỏng nhẹ';
+    responseText += ', em xin đề xuất các lựa chọn tối ưu nhất đang có sẵn tại shop:\n\n';
+  } else if (isGaming) {
+    responseText += 'Dạ đối với nhu cầu chơi game (Esport & AAA), em tư vấn anh/chị các mẫu Laptop Gaming cấu hình mạnh, tản nhiệt mát và tần số quét cao:\n\n';
+  } else if (isCoding) {
+    responseText += 'Dạ cho nhu cầu học tập lập trình & công nghệ thông tin (cần CPU khỏe, RAM 16GB+ chạy đa nhiệm mượt), các mẫu tốt nhất hiện có gồm:\n\n';
+  } else if (isGraphic) {
+    responseText += 'Dạ với nhu cầu thiết kế đồ họa, chỉnh sửa ảnh/video (cần màn hình chuẩn màu và card đồ họa tốt), em gợi ý các mẫu nổi bật:\n\n';
+  } else if (isOffice) {
+    responseText += 'Dạ phục vụ học tập và công việc văn phòng (ưu tiên mỏng nhẹ, pin trâu, phím êm), anh/chị tham khảo ngay các mẫu này nhé:\n\n';
+  } else {
+    responseText += 'Dạ em xin gợi ý các mẫu laptop chất lượng tốt, được nhiều khách hàng ưa chuộng tại DEVORA:\n\n';
+  }
+
+  chosenList.forEach(({ product, price, inStock }, idx) => {
+    const specs = [
+      product.CPU && `CPU: ${product.CPU}`,
+      product.RAM && `RAM: ${product.RAM}`,
+      product.Storage && `Ổ cứng: ${product.Storage}`,
+      product.Display && `Màn hình: ${product.Display}`,
+      product.RefreshRate && `Tần số quét: ${product.RefreshRate}`,
+    ].filter(Boolean).join(' | ');
+
+    const stockStr = inStock ? '✅ Còn hàng' : '⏳ Tạm hết hàng';
+    const num = idx + 1;
+    responseText += `🔹 **${num}. ${product.ProductName}**\n`;
+    responseText += `   • Giá bán: **${price.toLocaleString('vi-VN')} ₫** ${product.DiscountPrice && product.Price > product.DiscountPrice ? `(Giảm từ ${Number(product.Price).toLocaleString('vi-VN')} ₫)` : ''}\n`;
+    if (specs) responseText += `   • Cấu hình: ${specs}\n`;
+    responseText += `   • Tình trạng: ${stockStr}\n`;
+    
+    // Đánh giá điểm mạnh
+    if (isGaming || /gaming|rtx|gtx|144hz/i.test(productSearchText(product))) {
+      responseText += `   • Đánh giá: Chơi mượt các tựa game Esport (Valorant, LOL, FO4) và chiến tốt game 3D với FPS ổn định.\n`;
+    } else if (isCoding || /16gb|i7|ryzen 7/i.test(productSearchText(product))) {
+      responseText += `   • Đánh giá: Đa nhiệm tốt, mở nhiều tab & chạy mượt VS Code, Docker, Android Studio không lo giật lag.\n`;
+    } else {
+      responseText += `   • Đánh giá: Thiết kế sang trọng, hiệu năng ổn định, khởi động máy và mở ứng dụng cực nhanh.\n`;
+    }
+    responseText += '\n';
+  });
+
+  responseText += 'Anh/chị cần em tư vấn kỹ hơn về mẫu nào hoặc muốn hỗ trợ đặt hàng giao hỏa tốc không ạ? 😊';
+
+  return responseText;
 }
 
 exports.aiReply = async (req, res) => {
   const conversation = await findOwnedConversation(req, res);
   if (!conversation) return;
-  const apiKey = process.env.OPENAI_API_KEY;
 
   const latestCustomerMessage = await SupportMessage.findOne({
     where: { ConversationID: conversation.ConversationID, SenderRole: 'Customer' },
@@ -273,77 +342,146 @@ exports.aiReply = async (req, res) => {
     SupportMessage.findAll({ where: { ConversationID: conversation.ConversationID }, order: [['CreatedAt', 'DESC']], limit: 16 }),
     Product.findAll({ include: [{ model: Category }, { model: ProductVariant }] }),
   ]);
+
   const chronologicalHistory = history.slice().reverse();
   const recentCustomerContext = chronologicalHistory
-    .filter((message) => message.SenderRole === 'Customer')
-    .slice(-8).map((message) => message.Message).join('\n');
-  const budgetVnd = extractBudget(recentCustomerContext);
+    .filter((m) => m.SenderRole === 'Customer')
+    .slice(-6).map((m) => m.Message).join('\n');
 
-  if (!apiKey) {
-    const assistantMessage = await SupportMessage.create({
-      ConversationID: conversation.ConversationID,
-      SenderUserID: null,
-      SenderRole: 'AI',
-      SenderName: 'Trợ lý mua sắm MANB',
-      Message: buildCatalogFallback(recentCustomerContext || latestCustomerMessage.Message, products),
-    });
-    await conversation.update({ LastMessageAt: assistantMessage.CreatedAt });
-    return res.status(201).json({ message: assistantMessage, fallback: true });
-  }
+  const budgetVnd = extractBudget(recentCustomerContext || latestCustomerMessage.Message);
+  const relevantProducts = products.map((p) => ({
+    id: p.ProductID,
+    name: p.ProductName,
+    price: currentProductPrice(p),
+    originalPrice: Number(p.Price || 0),
+    stock: productStock(p),
+    cpu: p.CPU || '',
+    ram: p.RAM || '',
+    storage: p.Storage || '',
+    display: p.Display || '',
+    refreshRate: p.RefreshRate || '',
+    series: p.Series || '',
+    category: p.Category?.CategoryName || '',
+    description: clean(p.Description, 400),
+  }));
 
-  const relevantProducts = findRelevantProducts(recentCustomerContext || latestCustomerMessage.Message, products, budgetVnd);
-  const previousTurns = chronologicalHistory.filter((message) => message.MessageID !== latestCustomerMessage.MessageID)
-    .map((message) => `${message.SenderRole === 'Customer' ? 'Khách' : message.SenderRole === 'AI' ? 'Trợ lý AI' : 'Nhân viên'}: ${message.Message}`)
-    .join('\n');
-  const instructions = [
-    'Bạn là nhân viên tư vấn bán hàng máy tính của MANB.VN, không phải công cụ đọc danh sách. Trò chuyện bằng tiếng Việt tự nhiên, thân thiện, như đang tư vấn trực tiếp.',
-    'Mục tiêu là hiểu nhu cầu rồi giúp khách chọn. Dùng các tin nhắn trước để nhớ mục đích sử dụng, ngân sách, thương hiệu và ưu tiên; đừng hỏi lại điều khách đã nói.',
-    'Nếu khách chỉ hỏi một việc tra cứu cụ thể như một mẫu còn hàng không, trả lời thẳng câu đó trước. Nếu khách cần chọn máy nhưng chưa nói mục đích sử dụng, hãy hỏi một câu ngắn về việc họ làm (học/văn phòng, lập trình, game, đồ họa...). Khi đã rõ mục đích mà chưa biết ngân sách, hỏi ngân sách tối đa. Mỗi lượt chỉ hỏi tối đa một câu làm rõ quan trọng.',
-    'Khi đã đủ thông tin, đưa ra một lựa chọn phù hợp nhất và tối đa một phương án thay thế. Giải thích cụ thể cấu hình nào đáp ứng nhu cầu nào, nêu điểm đánh đổi và hỏi khách muốn ưu tiên điều gì tiếp theo. Không liệt kê hàng loạt tên sản phẩm hoặc kết thúc bằng lời mời chung chung.',
-    'Chỉ dùng sản phẩm trong catalog được cung cấp. Giá đang bán là priceVnd. Tồn kho parent bằng 0 là hết hàng trừ khi một biến thể có tồn riêng lớn hơn 0; khi đó nói rõ biến thể nào còn. Không bịa giá, tồn kho, GPU, thời lượng pin, trọng lượng, bảo hành, ưu đãi hay chính sách nếu dữ liệu không có.',
-    'Nếu tư vấn game/đồ họa nhưng dữ liệu không có GPU, nói rõ chưa đủ dữ liệu để đảm bảo hiệu năng tác vụ đó và hỏi khách hoặc chuyển nhân viên xác nhận. Không khẳng định cấu hình phù hợp chỉ từ thương hiệu hoặc tên dòng.',
-    'Nếu ngân sách khách nêu ra thấp hơn giá mọi mẫu còn hàng, nói rõ chưa có lựa chọn đúng ngân sách; chỉ nêu một mẫu vượt ngân sách gần nhất nếu hữu ích và ghi rõ phần vượt.',
-    'Nếu câu hỏi ngoài dữ liệu cửa hàng, thành thật nói chưa xác minh được và mời chuyển cho nhân viên. Không giả vờ đã kiểm tra thông tin không được cung cấp.',
-  ].join(' ');
+  const systemPrompt = `Bạn là Chuyên gia Tư vấn Bán hàng Laptop & Máy tính cao cấp của DEVORA.VN (DEVORA).
+Phong cách: Nhiệt tình, thân thiện, am hiểu kỹ thuật chuyên sâu nhưng diễn đạt dễ hiểu, sử dụng tiếng Việt tự nhiên và xưng hô 'em' - 'anh/chị' hoặc 'quý khách'.
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
-  try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
-        store: false,
-        instructions,
-        input: [
-          { role: 'user', content: `Thông tin nhu cầu đã nêu ở các lượt gần đây:\n${recentCustomerContext || '(chưa có)'}\n\nNgân sách nhận diện được (VND): ${budgetVnd || 'chưa nêu'}\n\nDữ liệu sản phẩm được truy vấn từ database hiện tại (JSON):\n${JSON.stringify(relevantProducts)}\n\nCác lượt hội thoại gần đây:\n${previousTurns || '(chưa có)'}\n\nTin nhắn mới nhất của khách:\n${latestCustomerMessage.Message}` },
+Nhiệm vụ:
+1. Đọc hiểu chính xác nhu cầu hoặc câu hỏi của khách hàng.
+2. Nếu khách hỏi thông thường (chào hỏi, bạn là ai, cảm ơn, hỏi bàn/ghế/điện thoại...): Trả lời tự nhiên, lịch sự và giải thích rõ DEVORA chỉ chuyên kinh doanh Laptop & Máy tính chính hãng.
+3. Nếu khách cần tìm máy: Dựa vào DANH SÁCH SẢN PHẨM THỰC TẾ dưới đây của cửa hàng để đưa ra tư vấn:
+${JSON.stringify(relevantProducts.slice(0, 25), null, 2)}
+
+Nguyên tắc:
+- Báo đúng tên máy, giá tiền (VND), cấu hình và tình trạng còn hàng theo dữ liệu trên.
+- Đưa ra 2 đến 3 gợi ý tốt nhất kèm giải thích lý do phù hợp nhu cầu.
+- Thông tin cửa hàng: Bảo hành 12-24 tháng chính hãng, 1 đổi 1 trong 30 ngày, Freeship toàn quốc, COD và trả góp.`;
+
+  // 1. Thử gọi Google Gemini API nếu có cấu hình
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (geminiApiKey) {
+    try {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+      const geminiPayload = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: `${systemPrompt}\n\nLịch sử trò chuyện gần đây:\n${chronologicalHistory.map(m => `${m.SenderRole}: ${m.Message}`).join('\n')}\n\nKhách hàng hỏi: "${latestCustomerMessage.Message}"\nHãy trả lời khách hàng một cách thông minh và tự nhiên:` }
+            ]
+          }
         ],
-        max_output_tokens: 500,
-      }),
-    });
-    const result = await response.json();
-    if (!response.ok) {
-      console.error('AI provider error:', response.status, result?.error?.message || 'Unknown provider error');
-      return res.status(502).json({ error: 'Trợ lý AI đang bận. Bạn có thể nhắn trực tiếp với bộ phận chăm sóc khách hàng.' });
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1000,
+        }
+      };
+
+      const geminiRes = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(geminiPayload),
+      });
+
+      if (geminiRes.ok) {
+        const geminiData = await geminiRes.json();
+        const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text && text.trim()) {
+          const assistantMessage = await SupportMessage.create({
+            ConversationID: conversation.ConversationID,
+            SenderUserID: null,
+            SenderRole: 'AI',
+            SenderName: 'Trợ lý DEVORA AI',
+            Message: text.trim().slice(0, 3000),
+          });
+          await conversation.update({ LastMessageAt: assistantMessage.CreatedAt });
+          return res.status(201).json({ message: assistantMessage });
+        }
+      }
+    } catch (geminiErr) {
+      console.warn('Gemini API call failed, falling back:', geminiErr.message);
     }
-    const answer = (result.output || []).flatMap((item) => item.content || [])
-      .filter((item) => item.type === 'output_text').map((item) => item.text).join('\n').trim();
-    if (!answer) return res.status(502).json({ error: 'AI chưa tạo được câu trả lời. Bạn có thể nhắn trực tiếp với bộ phận chăm sóc khách hàng.' });
-    const assistantMessage = await SupportMessage.create({
-      ConversationID: conversation.ConversationID,
-      SenderUserID: null,
-      SenderRole: 'AI',
-      SenderName: 'Trợ lý MANB AI',
-      Message: answer.slice(0, 2000),
-    });
-    await conversation.update({ LastMessageAt: assistantMessage.CreatedAt });
-    res.status(201).json({ message: assistantMessage });
-  } catch (error) {
-    console.error('AI assistant request failed:', error.message);
-    res.status(502).json({ error: 'Không kết nối được trợ lý AI. Bạn có thể nhắn trực tiếp với bộ phận chăm sóc khách hàng.' });
-  } finally {
-    clearTimeout(timeout);
   }
+
+  // 2. Thử gọi OpenAI API nếu có cấu hình
+  const openAiApiKey = process.env.OPENAI_API_KEY;
+  if (openAiApiKey) {
+    try {
+      const openAiUrl = 'https://api.openai.com/v1/chat/completions';
+      const openAiRes = await fetch(openAiUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openAiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...chronologicalHistory.slice(-8).map((m) => ({
+              role: m.SenderRole === 'Customer' ? 'user' : 'assistant',
+              content: m.Message,
+            })),
+            { role: 'user', content: latestCustomerMessage.Message },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        }),
+      });
+
+      if (openAiRes.ok) {
+        const openAiData = await openAiRes.json();
+        const text = openAiData.choices?.[0]?.message?.content;
+        if (text && text.trim()) {
+          const assistantMessage = await SupportMessage.create({
+            ConversationID: conversation.ConversationID,
+            SenderUserID: null,
+            SenderRole: 'AI',
+            SenderName: 'Trợ lý DEVORA AI',
+            Message: text.trim().slice(0, 3000),
+          });
+          await conversation.update({ LastMessageAt: assistantMessage.CreatedAt });
+          return res.status(201).json({ message: assistantMessage });
+        }
+      }
+    } catch (openAiErr) {
+      console.warn('OpenAI API call failed, falling back:', openAiErr.message);
+    }
+  }
+
+  // 3. Sử dụng Engine Tư vấn Thông minh Chuyên sâu Nội bộ (Smart Vietnamese Advice Engine)
+  const adviceText = buildSmartAdvice(latestCustomerMessage.Message, products, chronologicalHistory);
+
+  const assistantMessage = await SupportMessage.create({
+    ConversationID: conversation.ConversationID,
+    SenderUserID: null,
+    SenderRole: 'AI',
+    SenderName: 'Trợ lý DEVORA AI',
+    Message: adviceText,
+  });
+
+  await conversation.update({ LastMessageAt: assistantMessage.CreatedAt });
+  return res.status(201).json({ message: assistantMessage, smartEngine: true });
 };

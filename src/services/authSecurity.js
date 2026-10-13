@@ -11,7 +11,6 @@ const challenges = new Map();
 const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_RESEND_MS = 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
-const DEFAULT_PHONE_OTP = '123456';
 
 function normalizePhone(value) {
   const raw = String(value || '').trim();
@@ -151,7 +150,11 @@ async function sendEmail(to, code, subject, html) {
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
     subject,
+<<<<<<< HEAD
     text: html ? String(code) : `Mã xác thực MANB SHOP của bạn là ${code}. Mã có hiệu lực trong 5 phút.`,
+=======
+    text: html ? String(code) : `Ma xac thuc DEVORA cua ban la ${code}. Ma co hieu luc trong 5 phut.`,
+>>>>>>> 887136ecc23ec5938a30668b06a29f7005e77459
     ...(html ? { html } : {}),
   });
 }
@@ -226,7 +229,7 @@ function clearLoginAttempts(identifier) {
 module.exports = {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
   getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
-  hashPassword, verifyPassword, DEFAULT_PHONE_OTP,
+  hashPassword, verifyPassword,
   getLoginLockStatus, recordFailedLogin, clearLoginAttempts,
 };
 

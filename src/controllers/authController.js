@@ -3,9 +3,10 @@ const { User } = require('../models');
 const {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
   getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
-  hashPassword, verifyPassword, DEFAULT_PHONE_OTP,
+  hashPassword, verifyPassword,
   getLoginLockStatus, recordFailedLogin, clearLoginAttempts,
 } = require('../services/authSecurity');
+const { generateToken } = require('../services/jwtService');
 
 function sendError(res, error, fallback) {
   const status = Number(error.status) || 500;
@@ -66,7 +67,8 @@ exports.register = async (req, res) => {
       Role: 'Customer',
     });
     if (!req.body.firebaseIdToken) consumeChallenge(registrationKey);
-    return res.status(201).json({ message: 'Đăng ký thành công.', user: safeUser(user) });
+    const token = generateToken(user);
+    return res.status(201).json({ message: 'Đăng ký thành công.', token, user: safeUser(user) });
   } catch (error) {
     return sendError(res, error, 'Đăng ký thất bại.');
   }
@@ -75,10 +77,18 @@ exports.register = async (req, res) => {
 exports.sendRegistrationOtp = async (req, res) => {
   try {
     const phone = normalizePhone(req.body.phone);
+<<<<<<< HEAD
     const code = issueChallenge(`register:phone:${phone}`);
     return res.json({
       message: `Đã gửi mã OTP. Mã xác thực là ${code} (hiệu lực trong 5 phút).`,
       otp: code,
+=======
+    // issueChallenge with no fixedCode → generates a random 6-digit OTP
+    const otp = issueChallenge(`register:phone:${phone}`);
+    return res.json({
+      message: `Đã gửi mã OTP.`,
+      otp,  // returned for demo/dev: UI displays this above the phone input
+>>>>>>> 887136ecc23ec5938a30668b06a29f7005e77459
     });
   } catch (error) {
     return sendError(res, error, 'Không thể tạo mã OTP.');
@@ -89,6 +99,7 @@ exports.verifyRegistrationOtp = async (req, res) => {
   try {
     const phone = normalizePhone(req.body.phone);
     const otp = String(req.body.otp || '').trim();
+<<<<<<< HEAD
     if (!/^\d{6}$/.test(otp)) {
       return res.status(400).json({ error: 'Mã OTP phải gồm 6 chữ số.' });
     }
@@ -103,6 +114,14 @@ exports.verifyRegistrationOtp = async (req, res) => {
     });
   } catch (error) {
     return sendError(res, error, 'Không xác thực được mã OTP.');
+=======
+    if (!otp) return res.status(400).json({ error: 'Vui lòng nhập mã OTP.' });
+    const record = checkChallenge(`register:phone:${phone}`, otp);
+    if (!record) return res.status(400).json({ error: 'Mã OTP không đúng hoặc đã hết hạn.' });
+    return res.json({ message: 'Mã OTP hợp lệ. Bạn có thể đặt mật khẩu.' });
+  } catch (error) {
+    return sendError(res, error, 'Xác thực OTP thất bại.');
+>>>>>>> 887136ecc23ec5938a30668b06a29f7005e77459
   }
 };
 
@@ -173,7 +192,8 @@ exports.login = async (req, res) => {
       user.PasswordHash = await hashPassword(password);
       await user.save();
     }
-    return res.json({ message: 'Đăng nhập thành công.', user: safeUser(user) });
+    const token = generateToken(user);
+    return res.json({ message: 'Đăng nhập thành công.', token, user: safeUser(user) });
   } catch (error) {
     return sendError(res, error, 'Đăng nhập thất bại.');
   }
@@ -184,7 +204,8 @@ exports.firebasePhoneLogin = async (req, res) => {
     const phone = await verifyFirebasePhoneToken(req.body.firebaseIdToken, req.body.phone);
     const user = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(phone) } } });
     if (!user) return res.status(404).json({ error: 'Chưa có tài khoản với số điện thoại này.' });
-    return res.json({ message: 'Đăng nhập thành công.', user: safeUser(user) });
+    const token = generateToken(user);
+    return res.json({ message: 'Đăng nhập thành công.', token, user: safeUser(user) });
   } catch (error) {
     return sendError(res, error, 'Không xác thực được số điện thoại.');
   }
@@ -202,10 +223,18 @@ exports.sendPasswordResetOtp = async (req, res) => {
           { Email: contact },
         ] } });
 
+<<<<<<< HEAD
     if (!user) {
       return res.status(404).json({
         error: channel === 'phone' ? 'Số điện thoại này chưa được đăng ký tài khoản.' : 'Email này chưa được liên kết với tài khoản nào.'
       });
+=======
+    // Keep the response generic so this endpoint does not reveal whether an account exists.
+    if (user) {
+      const key = resetKey(channel, contact);
+      if (channel === 'email') await sendChallenge(key, (code) => sendEmail(contact, code, 'Mã OTP đặt lại mật khẩu DEVORA'));
+      else issueChallenge(key, DEFAULT_PHONE_OTP);
+>>>>>>> 887136ecc23ec5938a30668b06a29f7005e77459
     }
 
     const key = resetKey(channel, contact);
@@ -299,7 +328,7 @@ exports.sendEmailVerificationOtp = async (req, res) => {
     const existing = await User.findOne({ where: { RecoveryEmail: email } });
     if (existing && existing.UserID !== user.UserID) return res.status(409).json({ error: 'Email đã được dùng bởi tài khoản khác.' });
     const key = `email:${userId}:${email}`;
-    await sendChallenge(key, (code) => sendEmail(email, code, 'Mã OTP xác minh email MANB SHOP'));
+    await sendChallenge(key, (code) => sendEmail(email, code, 'Mã OTP xác minh email DEVORA'));
     return res.json({ message: 'Đã gửi mã xác minh đến email.' });
   } catch (error) {
     return sendError(res, error, 'Không gửi được mã email.');
@@ -337,7 +366,8 @@ exports.googleLogin = async (req, res) => {
     const { fullName, email, avatar } = req.body;
     let user = await User.findOne({ where: { Email: email } });
     if (!user) user = await User.create({ FullName: fullName, Email: email, Avatar: avatar, Role: 'Customer' });
-    return res.json({ message: 'Thành công', user: safeUser(user) });
+    const token = generateToken(user);
+    return res.json({ message: 'Thành công', token, user: safeUser(user) });
   } catch (error) {
     return sendError(res, error, 'Đăng nhập Google thất bại.');
   }
@@ -348,7 +378,7 @@ exports.sendLoginOtp = async (req, res) => {
     const email = emailAddress(req.body.email);
     const user = await User.findOne({ where: { Email: email } });
     if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
-    await sendChallenge(`login:${email}`, (code) => sendEmail(email, code, 'Mã OTP đăng nhập MANB SHOP'));
+    await sendChallenge(`login:${email}`, (code) => sendEmail(email, code, 'Mã OTP đăng nhập DEVORA'));
     return res.json({ message: 'Đã gửi OTP.' });
   } catch (error) {
     return sendError(res, error, 'Không gửi được OTP.');
@@ -362,9 +392,21 @@ exports.verifyLoginOtp = async (req, res) => {
     const user = await User.findOne({ where: { Email: email }, attributes: { exclude: ['PasswordHash'] } });
     if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
     consumeChallenge(`login:${email}`);
-    return res.json({ message: 'Đăng nhập thành công.', user });
+    const token = generateToken(user);
+    return res.json({ message: 'Đăng nhập thành công.', token, user });
   } catch (error) {
     return sendError(res, error, 'Đăng nhập OTP thất bại.');
+  }
+};
+
+exports.getMe = async (req, res) => {
+  try {
+    if (!req.currentUser) {
+      return res.status(401).json({ error: 'Chưa đăng nhập.' });
+    }
+    return res.json({ user: safeUser(req.currentUser) });
+  } catch (error) {
+    return sendError(res, error, 'Không thể lấy thông tin người dùng.');
   }
 };
 
