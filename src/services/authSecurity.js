@@ -150,11 +150,7 @@ async function sendEmail(to, code, subject, html) {
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to,
     subject,
-<<<<<<< HEAD
-    text: html ? String(code) : `Mã xác thực MANB SHOP của bạn là ${code}. Mã có hiệu lực trong 5 phút.`,
-=======
-    text: html ? String(code) : `Ma xac thuc DEVORA cua ban la ${code}. Ma co hieu luc trong 5 phut.`,
->>>>>>> 887136ecc23ec5938a30668b06a29f7005e77459
+    text: html ? String(code) : `Mã xác thực DEVORA của bạn là ${code}. Mã có hiệu lực trong 5 phút.`,
     ...(html ? { html } : {}),
   });
 }

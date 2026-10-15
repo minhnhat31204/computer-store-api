@@ -77,18 +77,10 @@ exports.register = async (req, res) => {
 exports.sendRegistrationOtp = async (req, res) => {
   try {
     const phone = normalizePhone(req.body.phone);
-<<<<<<< HEAD
     const code = issueChallenge(`register:phone:${phone}`);
     return res.json({
-      message: `Đã gửi mã OTP. Mã xác thực là ${code} (hiệu lực trong 5 phút).`,
-      otp: code,
-=======
-    // issueChallenge with no fixedCode → generates a random 6-digit OTP
-    const otp = issueChallenge(`register:phone:${phone}`);
-    return res.json({
       message: `Đã gửi mã OTP.`,
-      otp,  // returned for demo/dev: UI displays this above the phone input
->>>>>>> 887136ecc23ec5938a30668b06a29f7005e77459
+      otp: code,
     });
   } catch (error) {
     return sendError(res, error, 'Không thể tạo mã OTP.');
@@ -99,7 +91,6 @@ exports.verifyRegistrationOtp = async (req, res) => {
   try {
     const phone = normalizePhone(req.body.phone);
     const otp = String(req.body.otp || '').trim();
-<<<<<<< HEAD
     if (!/^\d{6}$/.test(otp)) {
       return res.status(400).json({ error: 'Mã OTP phải gồm 6 chữ số.' });
     }
@@ -114,14 +105,6 @@ exports.verifyRegistrationOtp = async (req, res) => {
     });
   } catch (error) {
     return sendError(res, error, 'Không xác thực được mã OTP.');
-=======
-    if (!otp) return res.status(400).json({ error: 'Vui lòng nhập mã OTP.' });
-    const record = checkChallenge(`register:phone:${phone}`, otp);
-    if (!record) return res.status(400).json({ error: 'Mã OTP không đúng hoặc đã hết hạn.' });
-    return res.json({ message: 'Mã OTP hợp lệ. Bạn có thể đặt mật khẩu.' });
-  } catch (error) {
-    return sendError(res, error, 'Xác thực OTP thất bại.');
->>>>>>> 887136ecc23ec5938a30668b06a29f7005e77459
   }
 };
 
@@ -223,18 +206,10 @@ exports.sendPasswordResetOtp = async (req, res) => {
           { Email: contact },
         ] } });
 
-<<<<<<< HEAD
     if (!user) {
       return res.status(404).json({
         error: channel === 'phone' ? 'Số điện thoại này chưa được đăng ký tài khoản.' : 'Email này chưa được liên kết với tài khoản nào.'
       });
-=======
-    // Keep the response generic so this endpoint does not reveal whether an account exists.
-    if (user) {
-      const key = resetKey(channel, contact);
-      if (channel === 'email') await sendChallenge(key, (code) => sendEmail(contact, code, 'Mã OTP đặt lại mật khẩu DEVORA'));
-      else issueChallenge(key, DEFAULT_PHONE_OTP);
->>>>>>> 887136ecc23ec5938a30668b06a29f7005e77459
     }
 
     const key = resetKey(channel, contact);
@@ -243,11 +218,11 @@ exports.sendPasswordResetOtp = async (req, res) => {
       try {
         await sendChallenge(key, (generatedCode) => {
           code = generatedCode;
-          return sendEmail(contact, generatedCode, 'Mã OTP đặt lại mật khẩu MANB SHOP');
+          return sendEmail(contact, generatedCode, 'Mã OTP đặt lại mật khẩu DEVORA');
         });
       } catch (err) {
-        // Nếu chưa cấu hình SMTP, tự sinh OTP giả lập để người dùng vẫn thao tác được
-        if (err.status === 503 || err.code === 'ESOCKET' || err.code === 'ECONNREFUSED') {
+        // Nếu chưa cấu hình SMTP hoặc lỗi gửi mail, tự sinh OTP giả lập để người dùng vẫn thao tác được
+        if (err.status === 503 || err.code === 'ESOCKET' || err.code === 'ECONNREFUSED' || err.message) {
           code = issueChallenge(key);
         } else {
           throw err;
