@@ -1,5 +1,5 @@
 const { Transaction } = require('sequelize');
-const { sequelize, CartItemDB, Product } = require('../models');
+const { sequelize, CartItemDB, Product, User } = require('../models');
 
 // Giáº£i thÃ­ch sá»­a lá»—i: Biáº¿n Ä‘á»•i dá»¯ liá»‡u (format) Ä‘á»ƒ Ä‘Æ°a thÃ´ng tin tá»« báº£ng Product (ProductName, ImageUrl...)
 // ra ngoÃ i cÃ¹ng má»™t cáº¥p vá»›i CartItemDB giÃºp Flutter Ä‘á»c Ä‘Æ°á»£c trá»±c tiáº¿p.
@@ -62,6 +62,14 @@ exports.addToCart = async (req, res) => {
     }
 
     const item = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const user = await User.findByPk(userId, { transaction });
+      if (!user) {
+        const error = new Error('Tài khoản không còn tồn tại trong dữ liệu hiện tại. Vui lòng đăng nhập lại.');
+        error.statusCode = 401;
+        error.code = 'USER_NOT_FOUND';
+        throw error;
+      }
+
       const product = await Product.findByPk(productId, { transaction });
       if (!product) {
         const error = new Error('Không tìm thấy sản phẩm.');
@@ -94,7 +102,11 @@ exports.addToCart = async (req, res) => {
 
   } catch (error) {
     console.error("Lá»—i thÃªm giá» hÃ ng:", error);
-    return res.status(error.statusCode || 500).json({ message: error.message, error: error.message });
+    return res.status(error.statusCode || 500).json({
+      message: error.message,
+      error: error.message,
+      ...(error.code ? { code: error.code } : {}),
+    });
   }
 };
 

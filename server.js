@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('./src/models');
 const Order = require('./src/models/Order');
+const Review = require('./src/models/Review');
 require('dotenv').config();
 
 const app = express();
@@ -254,9 +255,27 @@ async function ensurePhoneOnlyEmailSchema() {
   }
 }
 
+async function ensureReviewReplyColumns() {
+  try {
+    const queryInterface = sequelize.getQueryInterface();
+    const tableName = Review.getTableName();
+    const columns = await queryInterface.describeTable(tableName);
+    for (const [name, definition] of Object.entries({
+      AdminReply: { type: DataTypes.TEXT, allowNull: true },
+      AdminReplyAt: { type: DataTypes.DATE, allowNull: true },
+      AdminReplyUserID: { type: DataTypes.INTEGER, allowNull: true },
+    })) {
+      if (!columns[name]) await queryInterface.addColumn(tableName, name, definition);
+    }
+  } catch (err) {
+    console.warn('ensureReviewReplyColumns warning:', err.message);
+  }
+}
+
 sequelize.authenticate()
   .then(() => sequelize.sync())
   .then(ensurePhoneOnlyEmailSchema)
   .then(ensureOrderInventoryColumn)
+  .then(ensureReviewReplyColumns)
   .then(() => app.listen(PORT, '0.0.0.0', () => console.log(`API running on port ${PORT}`)))
   .catch(err => { console.error('Database startup error:', err); });

@@ -41,7 +41,7 @@ async function adjustOrderInventory(orderId, direction, transaction) {
   }
 }
 
-async function cancelPendingPayOSPayment(order, transaction) {
+async function cancelPendingPayOSPayment(order, transaction, allowPaidCancellation = false) {
   if (String(order.PaymentMethod || '').toLowerCase() !== 'payos') return;
   const payment = await PaymentTransaction.findOne({
     where: { OrderID: order.OrderID },
@@ -50,6 +50,7 @@ async function cancelPendingPayOSPayment(order, transaction) {
   });
   if (!payment || payment.Status !== 'PENDING') {
     if (payment?.Status === 'PAID') {
+      if (allowPaidCancellation) return;
       const error = new Error('Đơn hàng đã được thanh toán nên không thể hủy.');
       error.statusCode = 409;
       throw error;
@@ -63,6 +64,10 @@ async function cancelPendingPayOSPayment(order, transaction) {
     remotePayment = await getPayOS().paymentRequests.cancel(paymentIdentifier, 'Khách hàng hoặc cửa hàng đã hủy đơn hàng');
   }
   if (remotePayment.status === 'PAID') {
+    if (allowPaidCancellation) {
+      await payment.update({ Status: 'PAID', PaidAt: payment.PaidAt || new Date() }, { transaction });
+      return;
+    }
     const error = new Error('PayOS đã nhận thanh toán; không thể hủy đơn hàng.');
     error.statusCode = 409;
     error.paidPaymentId = payment.PaymentTransactionID;
@@ -86,7 +91,7 @@ async function persistPaidPaymentFromConflict(error) {
   if (order) await notifyOrderPaid(order);
 }
 
-async function changeOrderStatus(order, status, transaction, payOSAlreadyResolved = false, actorUserId = null, note = null) {
+async function changeOrderStatus(order, status, transaction, payOSAlreadyResolved = false, actorUserId = null, note = null, allowPaidCancellation = false) {
   const previousValue = order.Status || null;
   const previousStatus = String(previousValue || '').trim().toLowerCase();
   if (isDeliveredStatus(previousStatus) && previousStatus !== status.toLowerCase()) {
@@ -98,7 +103,7 @@ async function changeOrderStatus(order, status, transaction, payOSAlreadyResolve
 
   let inventoryReserved = Boolean(order.InventoryReserved);
   if (!isCancelledStatus(previousStatus) && status.toLowerCase() === 'cancelled') {
-    if (!payOSAlreadyResolved) await cancelPendingPayOSPayment(order, transaction);
+    if (!payOSAlreadyResolved) await cancelPendingPayOSPayment(order, transaction, allowPaidCancellation);
     if (inventoryReserved) await adjustOrderInventory(order.OrderID, 1, transaction);
     inventoryReserved = false;
   } else if (isCancelledStatus(previousStatus) && status.toLowerCase() !== 'cancelled') {
@@ -122,12 +127,19 @@ exports.cancelByUser = async (req, res) => {
     const result = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
       const order = await Order.findByPk(req.params.id, { transaction });
       if (!order || Number(order.UserID) !== userId) return { missing: true };
-      if (String(order.Status || '').trim().toLowerCase() !== 'pending') {
-        const error = new Error('Chỉ có thể hủy đơn đang chờ xác nhận.');
+      const status = String(order.Status || '').trim().toLowerCase();
+      const isCod = String(order.PaymentMethod || '').trim().toLowerCase() === 'cod';
+      const canCancel = isCod
+        ? ['pending', 'confirmed', 'processing', 'preparing', 'ready'].includes(status)
+        : status === 'pending';
+      if (!canCancel) {
+        const error = new Error(isCod
+          ? 'Chỉ có thể hủy đơn COD trước khi chuyển sang trạng thái đang giao.'
+          : 'Chỉ có thể hủy đơn chưa thanh toán đang chờ xác nhận.');
         error.statusCode = 409;
         throw error;
       }
-      const changed = await changeOrderStatus(order, 'Cancelled', transaction, false, userId, 'Khách hàng hủy đơn');
+      const changed = await changeOrderStatus(order, 'Cancelled', transaction, false, userId, null);
       return { order, changed };
     });
     if (result.missing) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
@@ -185,10 +197,17 @@ exports.updateStatus = async (req, res) => {
     if (!allowedStatuses.has(status)) {
       return res.status(400).json({ error: 'Tiến độ đơn hàng không hợp lệ.' });
     }
+    const note = String(req.body.Note || '').trim();
+    if (status === 'Cancelled' && !note) {
+      return res.status(400).json({ error: 'Vui lòng nhập lý do admin chủ động hủy đơn hàng.' });
+    }
+    if (note.length > 500) {
+      return res.status(400).json({ error: 'Lý do hủy không được vượt quá 500 ký tự.' });
+    }
     const result = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
       const order = await Order.findByPk(req.params.id, { transaction });
       if (!order) return { missing: true };
-      const changed = await changeOrderStatus(order, status, transaction, false, req.user?.UserID, req.body.Note);
+      const changed = await changeOrderStatus(order, status, transaction, false, req.user?.UserID, note || null, status === 'Cancelled');
       return { order, changed };
     });
     if (result.missing) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
@@ -365,7 +384,18 @@ exports.update = async (req, res) => {
           error.statusCode = 400;
           throw error;
         }
-        changed = await changeOrderStatus(order, status, transaction, false, req.user?.UserID, req.body.Note);
+        const note = String(req.body.Note || '').trim();
+        if (status === 'Cancelled' && !note) {
+          const error = new Error('Vui lòng nhập lý do admin chủ động hủy đơn hàng.');
+          error.statusCode = 400;
+          throw error;
+        }
+        if (note.length > 500) {
+          const error = new Error('Lý do hủy không được vượt quá 500 ký tự.');
+          error.statusCode = 400;
+          throw error;
+        }
+        changed = await changeOrderStatus(order, status, transaction, false, req.user?.UserID, note || null, status === 'Cancelled');
       }
       return { order, changed };
     });
@@ -667,10 +697,32 @@ exports.submitRefundRequest = async (req, res) => {
         throw error;
       }
 
+      if (String(order.PaymentMethod || '').trim().toLowerCase() !== 'payos') {
+        const error = new Error('Yêu cầu hoàn tiền qua tài khoản chỉ áp dụng cho đơn hàng đã thanh toán bằng QR/PayOS.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const payment = await PaymentTransaction.findOne({
+        where: { OrderID: orderId },
+        order: [['PaymentTransactionID', 'DESC']],
+        transaction
+      });
+      if (payment?.Status !== 'PAID') {
+        const error = new Error('Đơn hàng chưa thanh toán thành công, không cần gửi yêu cầu hoàn tiền.');
+        error.statusCode = 400;
+        throw error;
+      }
+
       const st = String(order.Status || '').trim().toLowerCase();
       if (['shipping', 'shipped', 'delivering', 'delivered', 'completed', 'cancelled', 'canceled'].includes(st)) {
         const error = new Error('Đơn hàng đang giao hoặc đã hoàn tất/đã hủy, không thể yêu cầu hoàn tiền.');
         error.statusCode = 400;
+        throw error;
+      }
+      if (order.RefundStatus === 'pending') {
+        const error = new Error('Đơn hàng đã có yêu cầu hoàn tiền đang chờ xử lý.');
+        error.statusCode = 409;
         throw error;
       }
 
@@ -751,7 +803,7 @@ exports.approveRefundRequest = async (req, res) => {
         ActorUserID: req.user?.UserID || null,
         PreviousStatus: 'RefundPending',
         NewStatus: 'Cancelled',
-        Note: 'Admin đã phê duyệt yêu cầu hoàn tiền và hoàn tất chuyển khoản cho khách.',
+        Note: `Đã hoàn tiền cho khách qua ${order.RefundBankName || 'ngân hàng'}, STK ${order.RefundBankAccount || '—'}, chủ TK ${order.RefundBankHolder || '—'}.`,
       }, { transaction });
 
       return { order };
