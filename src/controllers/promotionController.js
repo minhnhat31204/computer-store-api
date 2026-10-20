@@ -1,4 +1,4 @@
-const { Promotion } = require('../models');
+const { Promotion, Product } = require('../models');
 
 exports.getAll = async (req, res) => {
   try {
@@ -17,7 +17,6 @@ exports.getById = async (req, res) => {
     if (!promo) return res.status(404).json({ error: 'Không tìm thấy chương trình khuyến mãi' });
 
     let products = [];
-    const { Product } = require('../models');
     if (promo.ProductIDs) {
       try {
         const ids = Array.isArray(promo.ProductIDs)
@@ -40,7 +39,19 @@ exports.getById = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const newItem = await Promotion.create(req.body);
+    const { productDiscounts, ...promoData } = req.body;
+    const newItem = await Promotion.create(promoData);
+
+    if (productDiscounts && typeof productDiscounts === 'object') {
+      for (const [pId, discPrice] of Object.entries(productDiscounts)) {
+        const val = discPrice !== '' && discPrice !== null && !isNaN(Number(discPrice)) ? Number(discPrice) : null;
+        await Product.update(
+          { DiscountPrice: val && val > 0 ? val : null },
+          { where: { ProductID: Number(pId) } }
+        );
+      }
+    }
+
     res.status(201).json(newItem);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -49,7 +60,19 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
-    await Promotion.update(req.body, { where: { PromotionID: req.params.id } });
+    const { productDiscounts, ...promoData } = req.body;
+    await Promotion.update(promoData, { where: { PromotionID: req.params.id } });
+
+    if (productDiscounts && typeof productDiscounts === 'object') {
+      for (const [pId, discPrice] of Object.entries(productDiscounts)) {
+        const val = discPrice !== '' && discPrice !== null && !isNaN(Number(discPrice)) ? Number(discPrice) : null;
+        await Product.update(
+          { DiscountPrice: val && val > 0 ? val : null },
+          { where: { ProductID: Number(pId) } }
+        );
+      }
+    }
+
     res.status(200).json({ message: 'Updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -64,5 +87,3 @@ exports.delete = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-
