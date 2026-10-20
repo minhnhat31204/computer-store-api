@@ -8,6 +8,8 @@ const { DataTypes } = require('sequelize');
 const { sequelize } = require('./src/models');
 const Order = require('./src/models/Order');
 const Review = require('./src/models/Review');
+const jwt = require('jsonwebtoken');
+const { JWT_SECRET } = require('./src/services/jwtService');
 require('dotenv').config();
 
 const app = express();
@@ -82,31 +84,144 @@ const apiOverview = {
   ]
 };
 
-const basicAuth = (req, res, next) => {
+const getCookie = (req, name) => {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
+const renderConsoleLoginHtml = (redirectUrl = '/api/swagger', errorMsg = '', infoMsg = '') => {
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập Quản trị & Swagger - DEVORA</title>
+  <link rel="icon" type="image/png" href="/devora-icon.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { background-color: #020617; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100 flex items-center justify-center p-4 selection:bg-blue-600 selection:text-white font-sans">
+  <div class="w-full max-w-md bg-slate-900/95 border border-slate-800 rounded-3xl p-8 shadow-2xl shadow-blue-950/40 backdrop-blur-xl">
+    <div class="text-center mb-7">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 border border-blue-400/30 mb-3 shadow-lg shadow-blue-600/30">
+        <i class="fa-solid fa-shield-halved text-white text-2xl"></i>
+      </div>
+      <h1 class="text-xl font-black text-white tracking-tight">DEVORA System Console</h1>
+      <p class="text-xs text-slate-400 mt-1">Vui lòng tự nhập tài khoản quản trị để truy cập hệ thống</p>
+    </div>
+
+    ${errorMsg ? `
+    <div class="mb-5 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-semibold flex items-center gap-2.5">
+      <i class="fa-solid fa-circle-exclamation text-base shrink-0"></i>
+      <span>${errorMsg}</span>
+    </div>` : ''}
+
+    ${infoMsg ? `
+    <div class="mb-5 p-3.5 bg-blue-500/10 border border-blue-500/30 rounded-xl text-blue-400 text-xs font-semibold flex items-center gap-2.5">
+      <i class="fa-solid fa-circle-info text-base shrink-0"></i>
+      <span>${infoMsg}</span>
+    </div>` : ''}
+
+    <form method="POST" action="/api/console-login" autocomplete="off" class="space-y-4">
+      <input type="hidden" name="redirect" value="${redirectUrl}">
+      
+      <div>
+        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Tên tài khoản</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500 text-sm">
+            <i class="fa-solid fa-user"></i>
+          </span>
+          <input 
+            type="text" 
+            name="console_user" 
+            required 
+            autocomplete="off" 
+            placeholder="Nhập tên đăng nhập quản trị"
+            value=""
+            class="w-full bg-slate-950/80 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-600 outline-none transition"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Mật khẩu</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500 text-sm">
+            <i class="fa-solid fa-lock"></i>
+          </span>
+          <input 
+            type="password" 
+            name="console_pass" 
+            required 
+            autocomplete="new-password" 
+            placeholder="Nhập mật khẩu"
+            value=""
+            class="w-full bg-slate-950/80 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-600 outline-none transition"
+          />
+        </div>
+      </div>
+
+      <button 
+        type="submit" 
+        class="w-full mt-2 py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/25 transition active:scale-[0.98] cursor-pointer"
+      >
+        Đăng nhập vào Hệ thống
+      </button>
+    </form>
+
+    <div class="mt-6 pt-5 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500 font-medium">
+      <a href="https://devora.id.vn" class="hover:text-blue-400 transition inline-flex items-center gap-1.5">
+        <i class="fa-solid fa-arrow-left"></i> Trang chủ Shop
+      </a>
+      <span class="text-slate-600">DEVORA v2.5</span>
+    </div>
+  </div>
+</body>
+</html>`;
+};
+
+const consoleAuth = (req, res, next) => {
+  const adminUser = process.env.ADMIN_CONSOLE_USER || 'admin';
+  const adminPass = process.env.ADMIN_CONSOLE_PASS || 'admin123450';
+
+  // 1. Support Basic Auth header (curl / automated scripts)
   const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
-    res.setHeader('WWW-Authenticate', 'Basic realm="DEVORA Admin Console & Swagger Docs"');
-    return res.status(401).send('Authentication required: Vui lòng đăng nhập để truy cập Admin Console và Swagger API.');
+  if (authHeader && authHeader.startsWith('Basic ')) {
+    try {
+      const base64Credentials = authHeader.split(' ')[1];
+      const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+      const [username, ...passwordParts] = credentials.split(':');
+      const password = passwordParts.join(':');
+      if (username === adminUser && password === adminPass) {
+        return next();
+      }
+    } catch (e) {}
   }
 
-  try {
-    const base64Credentials = authHeader.split(' ')[1];
-    const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
-    const [username, ...passwordParts] = credentials.split(':');
-    const password = passwordParts.join(':');
-
-    const adminUser = process.env.ADMIN_CONSOLE_USER || 'admin';
-    const adminPass = process.env.ADMIN_CONSOLE_PASS || 'admin123450';
-
-    if (username === adminUser && password === adminPass) {
-      return next();
-    }
-  } catch (e) {
-    // Ignore error
+  // 2. Support JWT session cookie
+  const token = getCookie(req, 'devora_console_session');
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded && decoded.role === 'admin_console') {
+        return next();
+      }
+    } catch (e) {}
   }
 
-  res.setHeader('WWW-Authenticate', 'Basic realm="DEVORA Admin Console & Swagger Docs"');
-  return res.status(401).send('Tài khoản hoặc mật khẩu không chính xác.');
+  // 3. Not authenticated
+  if (req.path.endsWith('.json') || (!req.accepts('html') && req.accepts('json'))) {
+    return res.status(401).json({ error: 'Authentication required: Vui lòng đăng nhập để truy cập tài nguyên.' });
+  }
+
+  // Render Web Login Form directly with blank inputs (never triggers browser native pop-up!)
+  const redirectUrl = req.originalUrl || req.url || '/api/swagger';
+  return res.status(200).send(renderConsoleLoginHtml(redirectUrl));
 };
 
 const handleApiRoot = (req, res) => {
@@ -117,43 +232,36 @@ const handleApiRoot = (req, res) => {
   }
 };
 
+app.post('/api/console-login', (req, res) => {
+  const adminUser = process.env.ADMIN_CONSOLE_USER || 'admin';
+  const adminPass = process.env.ADMIN_CONSOLE_PASS || 'admin123450';
+  const redirectUrl = req.body.redirect || '/api/swagger';
+
+  const user = (req.body.console_user || req.body.username || '').trim();
+  const pass = req.body.console_pass || req.body.password || '';
+
+  if (user === adminUser && pass === adminPass) {
+    const token = jwt.sign({ role: 'admin_console' }, JWT_SECRET, { expiresIn: '8h' });
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    res.setHeader('Set-Cookie', `devora_console_session=${token}; Path=/; HttpOnly; SameSite=Lax${isHttps ? '; Secure' : ''}`);
+    return res.redirect(redirectUrl);
+  }
+
+  return res.status(401).send(renderConsoleLoginHtml(redirectUrl, 'Tên đăng nhập hoặc mật khẩu không chính xác.'));
+});
+
+app.get(['/api/logout', '/logout'], (req, res) => {
+  res.setHeader('Set-Cookie', 'devora_console_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax');
+  return res.status(200).send(renderConsoleLoginHtml('/api/swagger', '', 'Bạn đã đăng xuất khỏi phiên làm việc thành công.'));
+});
+
 // Protected routes (Admin Database Console & Swagger Docs)
-app.get(['/', '/api', '/api/', '/admin.html'], basicAuth, handleApiRoot);
-app.get(['/api/docs', '/api/swagger', '/docs', '/swagger', '/swagger.html', '/api/swagger.html'], basicAuth, (_req, res) => {
+app.get(['/', '/api', '/api/', '/admin.html', '/api/admin.html', '/api/admin'], consoleAuth, handleApiRoot);
+app.get(['/api/docs', '/api/swagger', '/docs', '/swagger', '/swagger.html', '/api/swagger.html'], consoleAuth, (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'swagger.html'));
 });
-app.get(['/api/swagger.json', '/swagger.json'], basicAuth, (_req, res) => {
+app.get(['/api/swagger.json', '/swagger.json'], consoleAuth, (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'swagger.json'));
-});
-app.get(['/api/logout', '/logout'], (_req, res) => {
-  res.setHeader('WWW-Authenticate', 'Basic realm="DEVORA Admin Console & Swagger Docs"');
-  res.status(401).send(`
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-      <meta charset="utf-8">
-      <title>Đã Đăng Xuất - DEVORA</title>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; padding: 36px 32px; max-width: 440px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
-        .icon { font-size: 48px; margin-bottom: 16px; }
-        h2 { margin: 0 0 10px; font-size: 22px; color: #fff; }
-        p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px; }
-        .btn { display: inline-block; background: #2563eb; color: #fff; text-decoration: none; font-weight: bold; padding: 12px 24px; border-radius: 12px; font-size: 14px; transition: 0.2s; }
-        .btn:hover { background: #1d4ed8; }
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <div class="icon">🔒</div>
-        <h2>Đã Đăng Xuất Thành Công</h2>
-        <p>Phiên bảo mật đã được xóa khỏi trình duyệt. Bất kỳ ai truy cập lại trang Swagger hay Console đều phải nhập chính xác tài khoản và mật khẩu quản trị viên.</p>
-        <a href="/api/swagger" class="btn">Đăng Nhập Lại Vào Swagger</a>
-      </div>
-    </body>
-    </html>
-  `);
 });
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
