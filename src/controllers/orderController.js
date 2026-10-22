@@ -248,14 +248,17 @@ exports.getByUserId = async (req, res) => {
 exports.create = async (req, res) => {
   try {
     const { UserID, TotalAmount, PaymentMethod, Items, RecipientName, RecipientPhone, ShippingAddress, Note, VoucherID, VoucherCode } = req.body;
+    const effectiveUserId = Number(UserID || req.user?.userId || 0);
 
-    if (!Array.isArray(Items) || Items.length === 0) {
+    const rawItems = Items || req.body.items || req.body.orderItems || [];
+
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
       return res.status(400).json({ error: 'Đơn hàng cần có ít nhất một sản phẩm.' });
     }
-    const orderItemsData = Items.map((item) => ({
-      ProductID: Number(item.ProductID || item.productID || item.ID),
+    const orderItemsData = rawItems.map((item) => ({
+      ProductID: Number(item.ProductID || item.productID || item.ID || item.id),
       Quantity: Number(item.Quantity || item.quantity || 1),
-      UnitPrice: Number(item.UnitPrice ?? item.Price ?? item.price ?? 0)
+      UnitPrice: Number(item.UnitPrice ?? item.Price ?? item.price ?? item.unitPrice ?? 0)
     }));
     if (orderItemsData.some((item) => !Number.isInteger(item.ProductID) || item.ProductID <= 0 || !Number.isInteger(item.Quantity) || item.Quantity <= 0 || !Number.isFinite(item.UnitPrice) || item.UnitPrice < 0)) {
       return res.status(400).json({ error: 'Thông tin sản phẩm trong đơn hàng không hợp lệ.' });
@@ -295,7 +298,7 @@ exports.create = async (req, res) => {
         }
       }
 
-      const subtotal = (Array.isArray(Items) ? Items : []).reduce((sum, item) => {
+      const subtotal = (Array.isArray(rawItems) ? rawItems : []).reduce((sum, item) => {
         const unitPrice = Number(item.UnitPrice ?? item.Price ?? item.price ?? 0);
         const quantity = Number(item.Quantity ?? item.quantity ?? 1);
         return sum + Math.max(0, unitPrice) * Math.max(0, quantity);
@@ -326,9 +329,13 @@ exports.create = async (req, res) => {
         await product.update({ StockQuantity: stock - quantity }, { transaction });
       }
 
+      const calculatedSubtotal = orderItemsData.reduce((sum, item) => sum + (item.UnitPrice * item.Quantity), 0);
+      const calculatedTotal = Math.max(0, calculatedSubtotal - discountAmount);
+      const finalTotalAmount = Number(TotalAmount ?? req.body.totalAmount ?? calculatedTotal);
+
       const order = await Order.create({
-        UserID,
-        TotalAmount,
+        UserID: effectiveUserId,
+        TotalAmount: finalTotalAmount,
         PaymentMethod: PaymentMethod || 'COD',
         Status: 'Pending',
         InventoryReserved: true,
@@ -346,7 +353,7 @@ exports.create = async (req, res) => {
         Note: PaymentMethod === 'COD' ? 'Đơn hàng COD - Chờ thanh toán khi nhận hàng' : 'Đơn hàng được tạo'
       }, { transaction });
       await OrderItem.bulkCreate(orderItemsData.map((item) => ({ ...item, OrderID: order.OrderID })), { transaction });
-      if (UserID) await CartItemDB.destroy({ where: { UserID }, transaction });
+      if (effectiveUserId) await CartItemDB.destroy({ where: { UserID: effectiveUserId }, transaction });
       return order;
     });
 
