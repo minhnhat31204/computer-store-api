@@ -37,6 +37,9 @@ exports.update = async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(req.body, 'PasswordHash')) {
       return res.status(400).json({ error: 'Không nhận mật khẩu đã mã hóa trực tiếp.' });
     }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'Phone')) {
+      return res.status(400).json({ error: 'Số điện thoại tài khoản được cố định sau khi tạo.' });
+    }
 
     const { oldPassword, newPassword, Password, ...fields } = req.body;
     const user = await User.findByPk(req.params.id);
@@ -77,7 +80,6 @@ exports.update = async (req, res) => {
     // Cập nhật các trường thông tin cá nhân khác
     if (fields.FullName !== undefined) user.FullName = fields.FullName;
     if (fields.Email !== undefined) user.Email = fields.Email;
-    if (fields.Phone !== undefined) user.Phone = fields.Phone;
     if (fields.Address !== undefined) user.Address = fields.Address;
     if (fields.Gender !== undefined) user.Gender = fields.Gender;
     if (fields.Birthday !== undefined) user.Birthday = fields.Birthday;
@@ -184,7 +186,6 @@ exports.updateProfile = async (req, res) => {
     if (req.body.bio !== undefined) user.Bio = String(req.body.bio || '').trim() || null;
     if (req.body.gender !== undefined) user.Gender = String(req.body.gender || '').trim() || null;
     if (req.body.birthday !== undefined) user.Birthday = req.body.birthday ? String(req.body.birthday).trim() : null;
-    if (req.body.phone !== undefined) user.Phone = String(req.body.phone || '').trim() || null;
     if (req.body.address !== undefined) user.Address = String(req.body.address || '').trim() || null;
     if (req.file) user.Avatar = `/uploads/${req.file.filename}`;
 
