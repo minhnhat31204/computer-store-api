@@ -322,6 +322,16 @@ exports.verifyEmailOtp = async (req, res) => {
     if (existing && existing.UserID !== user.UserID) return res.status(409).json({ error: 'Email đã được dùng bởi tài khoản khác.' });
     user.RecoveryEmail = email;
     user.RecoveryEmailVerified = true;
+    const isInternalOrEmptyEmail = !user.Email || 
+      user.Email.includes('@phone.devora.local') || 
+      user.Email.includes('@phone.manb.local') || 
+      user.Email.includes('@phone.local');
+    if (isInternalOrEmptyEmail) {
+      const emailConflict = await User.findOne({ where: { Email: email } });
+      if (!emailConflict || emailConflict.UserID === user.UserID) {
+        user.Email = email;
+      }
+    }
     await user.save();
     consumeChallenge(key);
     return res.json({ message: 'Email đã được xác minh.', user: safeUser(user) });

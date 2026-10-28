@@ -192,7 +192,7 @@ exports.getStatusHistory = async (req, res) => {
 
 exports.updateStatus = async (req, res) => {
   try {
-    const allowedStatuses = new Set(['Pending', 'Confirmed', 'Processing', 'Shipping', 'Delivered', 'Cancelled', 'RefundPending', 'Pending Refund']);
+    const allowedStatuses = new Set(['Pending', 'Confirmed', 'Processing', 'Shipping', 'Delivered', 'Cancelled', 'Returned', 'RefundPending', 'Pending Refund']);
     const status = String(req.body.Status || '').trim();
     if (!allowedStatuses.has(status)) {
       return res.status(400).json({ error: 'Tiến độ đơn hàng không hợp lệ.' });
@@ -799,7 +799,7 @@ exports.approveRefundRequest = async (req, res) => {
       }
 
       await order.update({
-        Status: 'Cancelled',
+        Status: 'Returned',
         RefundStatus: 'approved',
         RefundApprovedAt: new Date(),
         InventoryReserved: false
@@ -809,7 +809,7 @@ exports.approveRefundRequest = async (req, res) => {
         OrderID: order.OrderID,
         ActorUserID: req.user?.UserID || null,
         PreviousStatus: 'RefundPending',
-        NewStatus: 'Cancelled',
+        NewStatus: 'Returned',
         Note: `Đã hoàn tiền cho khách qua ${order.RefundBankName || 'ngân hàng'}, STK ${order.RefundBankAccount || '—'}, chủ TK ${order.RefundBankHolder || '—'}.`,
       }, { transaction });
 
@@ -818,7 +818,7 @@ exports.approveRefundRequest = async (req, res) => {
 
     if (result.missing) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
     await notifyOrderStatus(result.order, 'Cancelled').catch(() => {});
-    return res.status(200).json({ message: 'Đã phê duyệt hoàn tiền và chuyển trạng thái đơn hàng sang Đã hủy.', order: result.order });
+    return res.status(200).json({ message: 'Đã phê duyệt hoàn tiền và chuyển trạng thái đơn hàng sang Đã trả hàng.', order: result.order });
   } catch (error) {
     return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'Không phê duyệt được yêu cầu hoàn tiền.' });
   }

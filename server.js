@@ -358,6 +358,16 @@ async function ensurePhoneOnlyEmailSchema() {
       .map(batch => batch.trim())
       .filter(Boolean);
     for (const batch of batches) await sequelize.query(batch);
+    // Tự động đồng bộ Email = RecoveryEmail nếu Email còn trống hoặc là email tạm
+    try {
+      await sequelize.query(`
+        UPDATE [dbo].[Users]
+        SET [Email] = [RecoveryEmail]
+        WHERE ([Email] IS NULL OR [Email] LIKE N'%@phone.%')
+          AND [RecoveryEmail] IS NOT NULL
+          AND [RecoveryEmailVerified] = 1;
+      `);
+    } catch (_) {}
   } catch (err) {
     console.warn('ensurePhoneOnlyEmailSchema warning:', err.message);
   }
