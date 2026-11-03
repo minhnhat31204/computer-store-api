@@ -9,8 +9,23 @@ async function findOwnedConversation(req, res) {
   if (isAdmin(req)) return conversation;
   const userId = Number(req.body?.userId || req.query?.userId || 0);
   const visitorKey = clean(req.body?.visitorKey || req.query?.visitorKey, 100);
-  const owns = conversation.UserID ? userId === Number(conversation.UserID) : !!visitorKey && visitorKey === conversation.VisitorKey;
-  if (!owns) { res.status(403).json({ error: 'Không có quyền truy cập cuộc trò chuyện' }); return null; }
+
+  const matchesUser = userId && conversation.UserID && userId === Number(conversation.UserID);
+  const matchesVisitor = visitorKey && conversation.VisitorKey && visitorKey === conversation.VisitorKey;
+  const matchesBoth = userId && visitorKey && (!conversation.UserID || conversation.UserID === userId);
+
+  if (!matchesUser && !matchesVisitor && !matchesBoth) {
+    res.status(403).json({ error: 'Không có quyền truy cập cuộc trò chuyện' });
+    return null;
+  }
+
+  // Tự động liên kết UserID nếu cuộc trò chuyện của khách trước đó chưa có UserID
+  if (userId && !conversation.UserID) {
+    try {
+      await conversation.update({ UserID: userId });
+    } catch (_) {}
+  }
+
   return conversation;
 }
 
