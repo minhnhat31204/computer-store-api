@@ -267,6 +267,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(uploadDir));
+app.use('/api/uploads', express.static(uploadDir));
 const routes = [
   ['/api/categories', './src/routes/categoryRoutes'],
   ['/api/products', './src/routes/productRoutes'],

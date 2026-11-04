@@ -187,7 +187,7 @@ exports.updateProfile = async (req, res) => {
     if (req.body.gender !== undefined) user.Gender = String(req.body.gender || '').trim() || null;
     if (req.body.birthday !== undefined) user.Birthday = req.body.birthday ? String(req.body.birthday).trim() : null;
     if (req.body.address !== undefined) user.Address = String(req.body.address || '').trim() || null;
-    if (req.file) user.Avatar = `/uploads/${req.file.filename}`;
+    if (req.file) user.Avatar = `/api/uploads/${req.file.filename}`;
 
     await user.save();
 
