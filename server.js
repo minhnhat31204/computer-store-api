@@ -396,5 +396,5 @@ sequelize.authenticate()
   .then(ensurePhoneOnlyEmailSchema)
   .then(ensureOrderInventoryColumn)
   .then(ensureReviewReplyColumns)
-  .then(() => app.listen(PORT, '0.0.0.0', () => console.log(`API running on port ${PORT}`)))
+  .then(() => app.listen(PORT, '127.0.0.1', () => console.log(`API running on port ${PORT}`)))
   .catch(err => { console.error('Database startup error:', err); });

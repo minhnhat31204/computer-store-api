@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env.sms'), override: true });
 const { promisify } = require('util');
-const { getTransporter } = require('../config/mail');
+const { sendEmailMessage, getTransporter } = require('../config/mail');
 const admin = require('firebase-admin');
 
 const scrypt = promisify(crypto.scrypt);
