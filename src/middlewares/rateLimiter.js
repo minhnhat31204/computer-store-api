@@ -33,8 +33,32 @@ const registerLimiter = rateLimit({
   }
 });
 
+// 4. Giới hạn upload tệp / hình ảnh: tối đa 20 file trong 15 phút trên mỗi IP
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Bạn đã tải lên quá nhiều hình ảnh trong thời gian ngắn. Vui lòng đợi 15 phút trước khi thử lại.'
+  }
+});
+
+// 5. Giới hạn tin nhắn hỗ trợ & yêu cầu AI chat: tối đa 30 tin trong 1 phút trên mỗi IP
+const supportLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Bạn đang gửi tin nhắn quá nhanh. Vui lòng thử lại sau 1 phút.'
+  }
+});
+
 module.exports = {
   loginLimiter,
   otpLimiter,
-  registerLimiter
+  registerLimiter,
+  uploadLimiter,
+  supportLimiter
 };

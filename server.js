@@ -11,6 +11,7 @@ const Review = require('./src/models/Review');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('./src/services/jwtService');
 const { authenticateToken, requireAdmin } = require('./src/middlewares/authMiddleware');
+const { uploadLimiter } = require('./src/middlewares/rateLimiter');
 require('dotenv').config();
 
 const app = express();
@@ -48,8 +49,24 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth', authLimiter);
 
-const allowedOrigins = (process.env.FRONTEND_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean);
-app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true, credentials: true }));
+const defaultAllowedOrigins = [
+  'https://devora.id.vn',
+  'https://www.devora.id.vn',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
+const envOrigins = (process.env.FRONTEND_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean);
+const allowedOrigins = envOrigins.length ? envOrigins : defaultAllowedOrigins;
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    return callback(new Error('Chặn bởi chính sách bảo mật CORS (Origin không được phép).'));
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -78,7 +95,7 @@ const upload = multer({
   }
 });
 
-app.post('/api/products/upload', authenticateToken, requireAdmin, upload.single('image'), (req, res) => {
+app.post('/api/products/upload', authenticateToken, requireAdmin, uploadLimiter, upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'Không tìm thấy file' });
   }
@@ -304,6 +321,7 @@ const routes = [
   ['/api/favorites', './src/routes/favoriteRoutes'],
   ['/api/addresses', './src/routes/addressRoutes'],
   ['/api/support', './src/routes/supportRoutes'],
+  ['/api/upload', './src/routes/uploadRoutes'],
 ];
 
 routes.forEach(([pathUrl, routePath]) => {

@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const { authenticateToken } = require('../middlewares/authMiddleware');
+const { uploadLimiter } = require('../middlewares/rateLimiter');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -25,8 +26,16 @@ const upload = multer({
   }
 });
 
-// Chỉ người dùng có token đăng nhập hợp lệ mới được upload file
-router.post('/upload', authenticateToken, upload.single('image'), (req, res) => {
+// Chỉ người dùng có token đăng nhập hợp lệ mới được upload file, đồng thời áp dụng rate limiter
+router.post('/', authenticateToken, uploadLimiter, upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'Không tìm thấy file' });
+  }
+  const fileUrl = `/uploads/${req.file.filename}`;
+  res.json({ success: true, url: fileUrl });
+});
+
+router.post('/upload', authenticateToken, uploadLimiter, upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'Không tìm thấy file' });
   }

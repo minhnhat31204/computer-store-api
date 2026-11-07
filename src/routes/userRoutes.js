@@ -5,6 +5,8 @@ const crypto = require('crypto');
 const multer = require('multer');
 const c = require('../controllers/userController');
 const userController = require('../controllers/userController');
+const { authenticateToken, requireAdmin } = require('../middlewares/authMiddleware');
+const { uploadLimiter } = require('../middlewares/rateLimiter');
 
 const uploadDir = path.resolve(__dirname, '../../uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -32,11 +34,9 @@ function parseAvatar(req, res, next) {
   });
 }
 
-const { authenticateToken, requireAdmin } = require('../middlewares/authMiddleware');
-
 router.get('/', authenticateToken, requireAdmin, c.getAll);
 router.post('/', authenticateToken, requireAdmin, c.create);
-router.put('/:id/profile', authenticateToken, parseAvatar, c.updateProfile);
+router.put('/:id/profile', authenticateToken, uploadLimiter, parseAvatar, c.updateProfile);
 router.put('/:id', authenticateToken, c.update);
 router.put('/:id/role', authenticateToken, requireAdmin, c.updateRole);
 router.delete('/:id', authenticateToken, requireAdmin, c.delete);

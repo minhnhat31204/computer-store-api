@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const { User, CartItemDB, Favorite, Notification, AddressBookEntry, Review, Order, SupportConversation } = require('../models');
 const { hashPassword, verifyPassword } = require('../services/authSecurity');
 
@@ -200,7 +202,21 @@ exports.updateProfile = async (req, res) => {
     if (req.body.gender !== undefined) user.Gender = String(req.body.gender || '').trim() || null;
     if (req.body.birthday !== undefined) user.Birthday = req.body.birthday ? String(req.body.birthday).trim() : null;
     if (req.body.address !== undefined) user.Address = String(req.body.address || '').trim() || null;
-    if (req.file) user.Avatar = `/api/uploads/${req.file.filename}`;
+    if (req.file) {
+      const oldAvatar = user.Avatar;
+      user.Avatar = `/api/uploads/${req.file.filename}`;
+      if (oldAvatar && (oldAvatar.startsWith('/uploads/') || oldAvatar.startsWith('/api/uploads/'))) {
+        try {
+          const oldFilename = path.basename(oldAvatar);
+          const oldFilePath = path.resolve(__dirname, '../../uploads', oldFilename);
+          if (fs.existsSync(oldFilePath)) {
+            fs.unlink(oldFilePath, () => {});
+          }
+        } catch (cleanupErr) {
+          console.warn('Cannot delete old avatar:', cleanupErr.message);
+        }
+      }
+    }
 
     await user.save();
 

@@ -1,22 +1,21 @@
 const router = require('express').Router();
 const c = require('../controllers/cartController');
+const { authenticateToken, requireAdmin } = require('../middlewares/authMiddleware');
 
-// Láº¥y toÃ n bá»™ danh sÃ¡ch giá» hÃ ng
-router.get('/', c.getAll);
+// Chỉ Admin mới được xem toàn bộ giỏ hàng của tất cả người dùng
+router.get('/', authenticateToken, requireAdmin, c.getAll);
 
-// Láº¥y giá» hÃ ng theo UserID (Gá»i tá»« Flutter: GET /api/cart/1)
+// Lấy giỏ hàng theo UserID
 router.get('/:userId', c.getByUser);
 
-// ThÃªm sáº£n pháº©m vÃ o giá» (Gá»i tá»« Flutter: POST /api/cart/add)
+// Thêm sản phẩm vào giỏ
 router.post('/add', c.addToCart);
 
-// Cáº­p nháº­t sá»‘ lÆ°á»£ng (Gá»i tá»« Flutter: PUT /api/cart/update)
+// Cập nhật số lượng
 router.put('/update', c.update);
 router.put('/:id', c.update);
 
-// XÃ³a sáº£n pháº©m khá»i giá» (DELETE /api/cart/:id)
+// Xóa sản phẩm khỏi giỏ
 router.delete('/:id', c.delete);
 
 module.exports = router;
-
-
