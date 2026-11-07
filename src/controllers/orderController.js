@@ -583,17 +583,15 @@ exports.handlePayOSWebhook = async (req, res) => {
     try {
       webhookData = await getPayOS().webhooks.verify(req.body);
     } catch (verifyErr) {
-      if (req.body?.code === '00' || req.body?.desc === 'success') {
-        return res.status(200).json({ success: true });
-      }
-      console.warn('PayOS webhook verify warning:', verifyErr.message);
-      return res.status(200).json({ success: true, message: 'Received' });
+      console.warn('PayOS webhook signature verification failed:', verifyErr.message);
+      return res.status(400).json({ error: 'Chữ ký webhook PayOS không hợp lệ.' });
     }
 
-    const orderCodeStr = String(webhookData.orderCode || req.body?.data?.orderCode || '');
-    if (!orderCodeStr) {
-      return res.status(200).json({ success: true });
+    if (!webhookData || !webhookData.orderCode) {
+      return res.status(400).json({ error: 'Dữ liệu webhook không hợp lệ.' });
     }
+
+    const orderCodeStr = String(webhookData.orderCode);
 
     const payment = await PaymentTransaction.findOne({
       where: { PayOSOrderCode: orderCodeStr }
