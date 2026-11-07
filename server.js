@@ -10,6 +10,7 @@ const Order = require('./src/models/Order');
 const Review = require('./src/models/Review');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('./src/services/jwtService');
+const { authenticateToken, requireAdmin } = require('./src/middlewares/authMiddleware');
 require('dotenv').config();
 
 const app = express();
@@ -26,6 +27,16 @@ const generalLimiter = rateLimit({
   message: { error: 'Hệ thống phát hiện quá nhiều yêu cầu từ bạn. Vui lòng thử lại sau 1 phút.' },
 });
 app.use(generalLimiter);
+
+// Bổ sung Security Headers chống XSS, Clickjacking, MIME Sniffing
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.removeHeader('X-Powered-By');
+  next();
+});
 
 // Giới hạn riêng cho API xác thực/đăng nhập: tối đa 30 lần trong 1 phút
 const authLimiter = rateLimit({
@@ -56,9 +67,18 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + '-' + file.originalname.replace(/\s/g, '_'));
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype)) {
+      return cb(new Error('Chỉ chấp nhận file ảnh JPG, PNG, WEBP hoặc GIF.'));
+    }
+    cb(null, true);
+  }
+});
 
-app.post('/api/products/upload', upload.single('image'), (req, res) => {
+app.post('/api/products/upload', authenticateToken, requireAdmin, upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'Không tìm thấy file' });
   }
