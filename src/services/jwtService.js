@@ -8,6 +8,13 @@ if (!JWT_SECRET) {
 const ACTIVE_SECRET = JWT_SECRET || 'devora_jwt_super_secure_secret_key_2026_huflit_cnpmnc';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
+// Danh sách các khóa bí mật cũ để hỗ trợ các phiên làm việc đang đăng nhập không bị gián đoạn
+const LEGACY_SECRETS = [
+  'devora_jwt_super_secure_secret_key_2026_huflit_cnpmnc',
+  'super_secret_key_devora_store_2026_mssql_express',
+  'fallback_devora_secret_key_super_safe_2026_xyz'
+];
+
 /**
  * Tạo token JWT từ thông tin user
  * @param {object} user - User instance hoặc plain object
@@ -28,11 +35,24 @@ function generateToken(user) {
 
 /**
  * Xác thực token JWT
+ * Thử với ACTIVE_SECRET trước; nếu không khớp signature sẽ thử các khóa cũ trong thời gian chuyển tiếp
  * @param {string} token
  * @returns {object} decoded payload
  */
 function verifyToken(token) {
-  return jwt.verify(token, ACTIVE_SECRET);
+  try {
+    return jwt.verify(token, ACTIVE_SECRET);
+  } catch (err) {
+    if (err.name === 'JsonWebTokenError') {
+      for (const legacy of LEGACY_SECRETS) {
+        if (legacy === ACTIVE_SECRET) continue;
+        try {
+          return jwt.verify(token, legacy);
+        } catch {}
+      }
+    }
+    throw err;
+  }
 }
 
 module.exports = {

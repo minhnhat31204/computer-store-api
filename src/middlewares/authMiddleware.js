@@ -39,10 +39,16 @@ async function authenticateToken(req, res, next) {
 
   try {
     const decoded = verifyToken(token);
+    const userId = Number(decoded.userId || decoded.UserID || decoded.id || decoded.sub || 0);
+    if (!userId) {
+      return res.status(401).json({ error: 'Token không chứa mã định danh người dùng.' });
+    }
+    decoded.userId = userId;
+    decoded.UserID = userId;
     req.user = decoded;
 
     // Lấy thông tin user mới nhất từ CSDL
-    const dbUser = await User.findByPk(decoded.userId, {
+    const dbUser = await User.findByPk(userId, {
       attributes: { exclude: ['PasswordHash'] },
     });
 
