@@ -1,7 +1,22 @@
+const jwt = require('jsonwebtoken');
 const { SupportConversation, SupportMessage, Product, Category, ProductVariant } = require('../models');
 
 const clean = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
-const isAdmin = (req) => String(req.body?.role || req.query?.role || '').toLowerCase() === 'admin';
+
+function isAdmin(req) {
+  if (req.user?.role && String(req.user.role).toLowerCase() === 'admin') return true;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'devora_jwt_super_secure_secret_key_2026_huflit_cnpmnc');
+      if (String(decoded?.role).toLowerCase() === 'admin') {
+        req.user = decoded;
+        return true;
+      }
+    } catch {}
+  }
+  return false;
+}
 
 async function findOwnedConversation(req, res) {
   const conversation = await SupportConversation.findByPk(Number(req.params.id));

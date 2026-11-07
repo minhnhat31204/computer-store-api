@@ -34,6 +34,15 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
+    const targetUserId = Number(req.params.id);
+    const requesterRole = String(req.user?.role || '').toLowerCase();
+    const requesterId = Number(req.user?.userId || req.user?.UserID || 0);
+
+    // BẢO MẬT: Chỉ chính chủ tài khoản hoặc Admin mới có quyền sửa thông tin
+    if (requesterRole !== 'admin' && requesterId !== targetUserId) {
+      return res.status(403).json({ message: 'Bạn không có quyền sửa thông tin người dùng khác.' });
+    }
+
     if (Object.prototype.hasOwnProperty.call(req.body, 'PasswordHash')) {
       return res.status(400).json({ error: 'Không nhận mật khẩu đã mã hóa trực tiếp.' });
     }
@@ -42,7 +51,7 @@ exports.update = async (req, res) => {
     }
 
     const { oldPassword, newPassword, Password, ...fields } = req.body;
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findByPk(targetUserId);
 
     if (!user) {
       return res.status(404).json({ message: 'Không tìm thấy người dùng' });
@@ -50,14 +59,12 @@ exports.update = async (req, res) => {
 
     // Nếu người dùng có nhập mật khẩu mới hoặc mật khẩu cũ
     if (oldPassword || newPassword) {
-      // 1. Bắt buộc phải nhập đầy đủ cả 2 trường
       if (!oldPassword || !newPassword) {
         return res.status(400).json({ 
           message: 'Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới.' 
         });
       }
 
-      // 2. Kiểm tra MẬT KHẨU CŨ (Trích xuất thuộc tính .valid)
       const oldCheck = await verifyPassword(String(oldPassword), user.PasswordHash);
       if (!oldCheck.valid) {
         return res.status(400).json({ 
@@ -65,7 +72,6 @@ exports.update = async (req, res) => {
         });
       }
 
-      // 3. Kiểm tra MẬT KHẨU MỚI (Không được trùng mật khẩu cũ)
       const newCheck = await verifyPassword(String(newPassword), user.PasswordHash);
       if (newCheck.valid) {
         return res.status(400).json({ 
@@ -73,7 +79,6 @@ exports.update = async (req, res) => {
         });
       }
 
-      // 4. Mã hóa và lưu mật khẩu mới vào biến user
       user.PasswordHash = await hashPassword(String(newPassword));
     }
 
@@ -87,11 +92,13 @@ exports.update = async (req, res) => {
     if (fields.Username !== undefined) user.Username = fields.Username;
     if (fields.Bio !== undefined) user.Bio = fields.Bio;
 
-    // Cập nhật quyền (Role) hỗ trợ cả Role và role, Admin hoặc Customer
-    const rawRole = fields.Role !== undefined ? fields.Role : fields.role;
-    if (rawRole !== undefined && rawRole !== null && String(rawRole).trim() !== '') {
-      const cleanRole = String(rawRole).trim();
-      user.Role = cleanRole.toLowerCase() === 'admin' ? 'Admin' : 'Customer';
+    // BẢO MẬT: CHỈ CÓ ADMIN THỰC SỰ MỚI ĐƯỢC PHÉP THAY ĐỔI ROLE
+    if (requesterRole === 'admin') {
+      const rawRole = fields.Role !== undefined ? fields.Role : fields.role;
+      if (rawRole !== undefined && rawRole !== null && String(rawRole).trim() !== '') {
+        const cleanRole = String(rawRole).trim();
+        user.Role = cleanRole.toLowerCase() === 'admin' ? 'Admin' : 'Customer';
+      }
     }
 
     await user.save();
@@ -140,7 +147,6 @@ exports.delete = async (req, res) => {
       return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
     }
 
-    // Xóa/gỡ bỏ liên kết các bản ghi phụ thuộc tránh lỗi ràng buộc khóa ngoại (Foreign Key)
     if (CartItemDB) await CartItemDB.destroy({ where: { UserID: userId } }).catch(() => {});
     if (Favorite) await Favorite.destroy({ where: { UserID: userId } }).catch(() => {});
     if (Notification) await Notification.destroy({ where: { UserID: userId } }).catch(() => {});
@@ -159,9 +165,7 @@ exports.delete = async (req, res) => {
 exports.checkPhone = async (req, res) => {
   try {
     const { phone } = req.body;
-
     const user = await User.findOne({ where: { Phone: phone } });
-
     if (user) {
       return res.status(200).json({ user: user });
     } else {
@@ -174,11 +178,20 @@ exports.checkPhone = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
+    const targetUserId = Number(req.params.id);
+    const requesterRole = String(req.user?.role || '').toLowerCase();
+    const requesterId = Number(req.user?.userId || req.user?.UserID || 0);
+
+    // BẢO MẬT: Chỉ chính chủ tài khoản hoặc Admin mới có quyền sửa thông tin
+    if (requesterRole !== 'admin' && requesterId !== targetUserId) {
+      return res.status(403).json({ error: 'Bạn không có quyền sửa thông tin người dùng khác.' });
+    }
+
     const fullName = String(req.body.fullName || '').trim();
     if (!fullName) return res.status(400).json({ error: 'Tên hiển thị không được để trống.' });
     if (fullName.length > 100) return res.status(400).json({ error: 'Tên hiển thị không được dài quá 100 ký tự.' });
 
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findByPk(targetUserId);
     if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
 
     user.FullName = fullName;
