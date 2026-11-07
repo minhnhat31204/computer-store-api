@@ -340,9 +340,13 @@ exports.create = async (req, res) => {
         await product.update({ StockQuantity: stock - quantity }, { transaction });
       }
 
+      const defaultShippingFee = 20000;
+      const clientShippingFee = req.body.ShippingFee !== undefined ? Number(req.body.ShippingFee) : defaultShippingFee;
+      const validShippingFee = Number.isFinite(clientShippingFee) && clientShippingFee >= 0 ? Math.round(clientShippingFee) : defaultShippingFee;
+
       const calculatedSubtotal = orderItemsData.reduce((sum, item) => sum + (item.UnitPrice * item.Quantity), 0);
-      const calculatedTotal = Math.max(0, calculatedSubtotal - discountAmount);
-      // Bảo mật chống Price Tampering: BẮT BUỘC dùng calculatedTotal tính từ DB, triệt để không nhận TotalAmount client gửi
+      const calculatedTotal = Math.max(0, calculatedSubtotal - discountAmount) + validShippingFee;
+      // Bảo mật chống Price Tampering: BẮT BUỘC dùng calculatedTotal tính từ giá thực của sản phẩm trong DB + phí vận chuyển
       const finalTotalAmount = calculatedTotal;
 
       const order = await Order.create({
