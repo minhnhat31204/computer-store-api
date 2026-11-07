@@ -429,10 +429,33 @@ async function ensureReviewReplyColumns() {
   }
 }
 
+
+async function ensureVouchersStatus() {
+  try {
+    const { Voucher } = require('./src/models');
+    if (!Voucher) return;
+
+    // 1 voucher hết hạn sử dụng không áp dụng được (TEST)
+    await Voucher.update(
+      { ExpiryDate: '2024-10-30 23:59:59', IsActive: true },
+      { where: { Code: 'TEST' } }
+    );
+
+    // Các voucher còn hạn sử dụng và áp dụng được bình thường (SALE20, SUMMER2026)
+    await Voucher.update(
+      { ExpiryDate: '2026-12-31 23:59:59', IsActive: true },
+      { where: { Code: ['SALE20', 'SUMMER2026'] } }
+    );
+  } catch (err) {
+    console.warn('ensureVouchersStatus warning:', err.message);
+  }
+}
+
 sequelize.authenticate()
   .then(() => sequelize.sync())
   .then(ensurePhoneOnlyEmailSchema)
   .then(ensureOrderInventoryColumn)
   .then(ensureReviewReplyColumns)
+  .then(ensureVouchersStatus)
   .then(() => app.listen(PORT, '127.0.0.1', () => console.log(`API running on port ${PORT}`)))
   .catch(err => { console.error('Database startup error:', err); });
