@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+const { verifyToken } = require('../services/jwtService');
 const { SupportConversation, SupportMessage, Product, Category, ProductVariant } = require('../models');
 
 const clean = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -8,7 +8,7 @@ function isAdmin(req) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
-      const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || 'devora_jwt_super_secure_secret_key_2026_huflit_cnpmnc');
+      const decoded = verifyToken(authHeader.split(' ')[1]);
       if (String(decoded?.role).toLowerCase() === 'admin') {
         req.user = decoded;
         return true;

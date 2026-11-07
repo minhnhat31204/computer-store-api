@@ -255,13 +255,24 @@ exports.create = async (req, res) => {
     if (!Array.isArray(rawItems) || rawItems.length === 0) {
       return res.status(400).json({ error: 'Đơn hàng cần có ít nhất một sản phẩm.' });
     }
-    const orderItemsData = rawItems.map((item) => ({
-      ProductID: Number(item.ProductID || item.productID || item.ID || item.id),
-      Quantity: Number(item.Quantity || item.quantity || 1),
-      UnitPrice: Number(item.UnitPrice ?? item.Price ?? item.price ?? item.unitPrice ?? 0)
-    }));
-    if (orderItemsData.some((item) => !Number.isInteger(item.ProductID) || item.ProductID <= 0 || !Number.isInteger(item.Quantity) || item.Quantity <= 0 || !Number.isFinite(item.UnitPrice) || item.UnitPrice < 0)) {
-      return res.status(400).json({ error: 'Thông tin sản phẩm trong đơn hàng không hợp lệ.' });
+    const orderItemsData = [];
+    for (const item of rawItems) {
+      const pid = Number(item.ProductID || item.productID || item.ID || item.id);
+      const qty = Number(item.Quantity || item.quantity || 1);
+      if (!Number.isInteger(pid) || pid <= 0 || !Number.isInteger(qty) || qty <= 0) {
+        return res.status(400).json({ error: 'Thông tin sản phẩm trong đơn hàng không hợp lệ.' });
+      }
+      const product = await Product.findByPk(pid);
+      if (!product) {
+        return res.status(400).json({ error: `Không tìm thấy sản phẩm #${pid}.` });
+      }
+      const realUnitPrice = Number(product.Price) || 0;
+      orderItemsData.push({
+        ProductID: pid,
+        Quantity: qty,
+        UnitPrice: realUnitPrice,
+        ProductName: product.ProductName
+      });
     }
 
     let discountAmount = 0;
@@ -331,7 +342,8 @@ exports.create = async (req, res) => {
 
       const calculatedSubtotal = orderItemsData.reduce((sum, item) => sum + (item.UnitPrice * item.Quantity), 0);
       const calculatedTotal = Math.max(0, calculatedSubtotal - discountAmount);
-      const finalTotalAmount = Number(TotalAmount ?? req.body.totalAmount ?? calculatedTotal);
+      // Bảo mật chống Price Tampering: BẮT BUỘC dùng calculatedTotal tính từ DB, triệt để không nhận TotalAmount client gửi
+      const finalTotalAmount = calculatedTotal;
 
       const order = await Order.create({
         UserID: effectiveUserId,
