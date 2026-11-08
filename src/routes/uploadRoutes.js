@@ -19,8 +19,11 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype)) {
-      return cb(new Error('Chỉ chấp nhận file ảnh JPG, PNG, WEBP hoặc GIF.'));
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedMimes.includes(file.mimetype) || !allowedExts.includes(ext)) {
+      return cb(new Error('Chỉ chấp nhận file ảnh JPG, PNG, WEBP hoặc GIF hợp lệ.'));
     }
     cb(null, true);
   }
