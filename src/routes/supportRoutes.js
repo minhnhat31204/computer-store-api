@@ -9,5 +9,8 @@ router.get('/conversations', authenticateToken, requireAdmin, controller.listCon
 router.get('/conversations/:id/messages', controller.getMessages);
 router.post('/conversations/:id/messages', supportLimiter, controller.sendMessage);
 router.post('/conversations/:id/ai-reply', supportLimiter, controller.aiReply);
+router.post('/conversations/:id/claim', authenticateToken, requireAdmin, controller.claimConversation);
+router.post('/conversations/:id/ask-close', authenticateToken, requireAdmin, controller.askCloseConversation);
+router.post('/conversations/:id/respond-close', controller.respondCloseConversation);
 
 module.exports = router;

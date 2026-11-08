@@ -1,4 +1,4 @@
-const { Transaction } = require('sequelize');
+const { Transaction, Op } = require('sequelize');
 const { sequelize, Order, OrderItem, User, Product, CartItemDB, PaymentTransaction, Voucher, OrderStatusHistory } = require('../models');
 const { getPayOS } = require('../services/payos');
 const { notifyOrderCreated, notifyOrderStatus, notifyOrderPaid } = require('../services/orderNotifications');
@@ -884,10 +884,15 @@ exports.rejectRefundRequest = async (req, res) => {
 // Admin lấy danh sách yêu cầu hoàn tiền
 exports.getRefundRequests = async (req, res) => {
   try {
+    const { status } = req.query;
+    const where = {};
+    if (status && status !== 'all') {
+      where.RefundStatus = status.toLowerCase();
+    } else {
+      where.RefundStatus = { [Op.in]: ['pending', 'approved', 'rejected'] };
+    }
     const data = await Order.findAll({
-      where: {
-        RefundStatus: 'pending'
-      },
+      where,
       include: [
         { model: User, attributes: ['UserID', 'FullName', 'Email', 'Phone'] },
         {
@@ -906,6 +911,44 @@ exports.getRefundRequests = async (req, res) => {
     });
     return res.status(200).json(data);
   } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Cập nhật trạng thái hàng loạt cho nhiều đơn hàng
+exports.bulkUpdateOrderStatus = async (req, res) => {
+  try {
+    const { orderIds, status } = req.body;
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ error: 'Danh sách đơn hàng không hợp lệ' });
+    }
+    if (!status) {
+      return res.status(400).json({ error: 'Trạng thái không được để trống' });
+    }
+
+    const updated = await sequelize.transaction(async (t) => {
+      const results = [];
+      for (const id of orderIds) {
+        const order = await Order.findByPk(id, { transaction: t });
+        if (order) {
+          const oldStatus = order.Status;
+          await order.update({ Status: status }, { transaction: t });
+          await OrderStatusHistory.create({
+            OrderID: order.OrderID,
+            Status: status,
+            Note: "Admin cập nhật hàng loạt từ [" + oldStatus + "] sang [" + status + "]",
+            ChangedBy: req.user?.username || req.user?.FullName || 'Admin',
+            CreatedAt: new Date()
+          }, { transaction: t }).catch(() => {});
+          results.push(order.OrderID);
+        }
+      }
+      return results;
+    });
+
+    return res.status(200).json({ message: "Đã cập nhật " + updated.length + " đơn hàng", updatedIds: updated });
+  } catch (error) {
+    console.error('Bulk update order status error:', error);
     return res.status(500).json({ error: error.message });
   }
 };

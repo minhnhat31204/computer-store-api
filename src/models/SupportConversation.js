@@ -9,6 +9,9 @@ module.exports = sequelize.define('SupportConversation', {
   CustomerName: { type: DataTypes.STRING(150), allowNull: false, defaultValue: 'Khách hàng' },
   CustomerEmail: { type: DataTypes.STRING(255), allowNull: true },
   Status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'Open' },
+  AssignedAdminName: { type: DataTypes.STRING(150), allowNull: true },
+  AssignedAdminID: { type: DataTypes.INTEGER, allowNull: true },
+  CloseRequested: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
   CreatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   LastMessageAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
 }, { tableName: 'SupportConversations', timestamps: false });

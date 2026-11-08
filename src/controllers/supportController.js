@@ -82,16 +82,104 @@ exports.sendMessage = async (req, res) => {
   const message = clean(req.body.message, 2000);
   if (!message) return res.status(400).json({ error: 'Tin nhắn không được để trống' });
   const admin = isAdmin(req);
+  const senderName = clean(req.body.senderName, 150);
+
+  if (admin) {
+    if (conversation.AssignedAdminName && senderName && conversation.AssignedAdminName.toLowerCase() !== senderName.toLowerCase()) {
+      return res.status(403).json({ error: `Cuộc trò chuyện này đang được xử lý bởi admin ${conversation.AssignedAdminName}. Bạn chỉ có quyền xem.` });
+    }
+    if (!conversation.AssignedAdminName && senderName) {
+      await conversation.update({
+        AssignedAdminName: senderName,
+        AssignedAdminID: req.user?.userId || req.user?.UserID || null
+      });
+    }
+  }
+
   const userId = Number(req.body.userId || 0) || null;
   const sender = await SupportMessage.create({
     ConversationID: conversation.ConversationID,
     SenderUserID: admin ? userId : (conversation.UserID || null),
     SenderRole: admin ? 'Admin' : 'Customer',
-    SenderName: clean(req.body.senderName, 150) || (admin ? 'Quản trị viên' : conversation.CustomerName),
+    SenderName: senderName || (admin ? (conversation.AssignedAdminName || 'Quản trị viên') : conversation.CustomerName),
     Message: message,
   });
   await conversation.update({ LastMessageAt: sender.CreatedAt });
-  res.status(201).json({ message: sender });
+  res.status(201).json({ message: sender, conversation });
+};
+
+exports.claimConversation = async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Chỉ admin mới có quyền tiếp nhận cuộc trò chuyện' });
+  const conversation = await SupportConversation.findByPk(Number(req.params.id));
+  if (!conversation) return res.status(404).json({ error: 'Không tìm thấy cuộc trò chuyện' });
+
+  const adminName = clean(req.body.adminName, 150);
+  if (!adminName) return res.status(400).json({ error: 'Vui lòng cung cấp tên quản trị viên' });
+
+  if (conversation.AssignedAdminName && conversation.AssignedAdminName.toLowerCase() !== adminName.toLowerCase()) {
+    return res.status(409).json({
+      error: `Cuộc trò chuyện này đã được nhận bởi ${conversation.AssignedAdminName}.`,
+      assignedAdminName: conversation.AssignedAdminName
+    });
+  }
+
+  await conversation.update({
+    AssignedAdminName: adminName,
+    AssignedAdminID: req.user?.userId || req.user?.UserID || null
+  });
+
+  res.json({ success: true, conversation });
+};
+
+exports.askCloseConversation = async (req, res) => {
+  const conversation = await SupportConversation.findByPk(Number(req.params.id));
+  if (!conversation) return res.status(404).json({ error: 'Không tìm thấy cuộc trò chuyện' });
+
+  const admin = isAdmin(req);
+  const senderName = clean(req.body.adminName, 150) || conversation.AssignedAdminName || 'DEVORA Hỗ trợ';
+
+  await conversation.update({ CloseRequested: true });
+
+  const closePromptMsg = await SupportMessage.create({
+    ConversationID: conversation.ConversationID,
+    SenderUserID: admin ? (req.user?.userId || req.user?.UserID || null) : null,
+    SenderRole: 'Admin',
+    SenderName: senderName,
+    Message: 'DEVORA xin hỏi: Quý khách đã hài lòng với giải đáp chưa và có muốn đóng phiên hỗ trợ này không ạ?',
+  });
+
+  await conversation.update({ LastMessageAt: closePromptMsg.CreatedAt });
+  res.json({ success: true, conversation, message: closePromptMsg });
+};
+
+exports.respondCloseConversation = async (req, res) => {
+  const conversation = await SupportConversation.findByPk(Number(req.params.id));
+  if (!conversation) return res.status(404).json({ error: 'Không tìm thấy cuộc trò chuyện' });
+
+  const { close } = req.body;
+  if (close === true) {
+    await conversation.update({ Status: 'Closed', CloseRequested: false });
+    const closeNotice = await SupportMessage.create({
+      ConversationID: conversation.ConversationID,
+      SenderUserID: null,
+      SenderRole: 'AI',
+      SenderName: 'Hệ thống DEVORA',
+      Message: 'Đã đóng phiên hỗ trợ. Cảm ơn quý khách đã tin tưởng và đồng hành cùng DEVORA!',
+    });
+    await conversation.update({ LastMessageAt: closeNotice.CreatedAt });
+    return res.json({ success: true, status: 'Closed', conversation, message: closeNotice });
+  } else {
+    await conversation.update({ CloseRequested: false });
+    const continueNotice = await SupportMessage.create({
+      ConversationID: conversation.ConversationID,
+      SenderUserID: conversation.UserID || null,
+      SenderRole: 'Customer',
+      SenderName: conversation.CustomerName,
+      Message: 'Tôi muốn tiếp tục được hỗ trợ.',
+    });
+    await conversation.update({ LastMessageAt: continueNotice.CreatedAt });
+    return res.json({ success: true, status: 'Open', conversation, message: continueNotice });
+  }
 };
 
 function normalize(value) {

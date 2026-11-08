@@ -9,6 +9,7 @@ router.post('/:id/payos-payment', authenticateToken, c.createPayOSPayment);
 router.get('/:id/payment-status', authenticateToken, c.getPaymentStatus);
 router.get('/', authenticateToken, requireAdmin, c.getAll);
 router.get('/refund-requests', authenticateToken, requireAdmin, c.getRefundRequests);
+router.put('/bulk-status', authenticateToken, requireAdmin, c.bulkUpdateOrderStatus);
 router.get('/:id/history', authenticateToken, c.getStatusHistory);
 router.get('/user/:userId', authenticateToken, c.getByUserId);
 router.post('/', authenticateToken, c.create);
@@ -21,4 +22,3 @@ router.put('/:id', authenticateToken, requireAdmin, c.update);
 router.delete('/:id', authenticateToken, requireAdmin, c.delete);
 
 module.exports = router;
-
