@@ -95,7 +95,20 @@ exports.update = async (req, res) => {
     if (fields.Email !== undefined) user.Email = fields.Email;
     if (fields.Address !== undefined) user.Address = fields.Address;
     if (fields.Gender !== undefined) user.Gender = fields.Gender;
-    if (fields.Birthday !== undefined) user.Birthday = fields.Birthday;
+    if (fields.Birthday !== undefined) {
+      const bdayStr = fields.Birthday ? String(fields.Birthday).trim() : null;
+      if (bdayStr) {
+        const bdayDate = new Date(bdayStr);
+        if (!isNaN(bdayDate.getTime())) {
+          const now = new Date();
+          now.setHours(23, 59, 59, 999);
+          if (bdayDate > now) {
+            return res.status(400).json({ error: 'Ngày sinh không thể là ngày trong tương lai.' });
+          }
+        }
+      }
+      user.Birthday = bdayStr;
+    }
     if (fields.Avatar !== undefined) user.Avatar = fields.Avatar;
     if (fields.Username !== undefined) user.Username = fields.Username;
     if (fields.Bio !== undefined) user.Bio = fields.Bio;
@@ -215,7 +228,20 @@ exports.updateProfile = async (req, res) => {
     }
     if (req.body.bio !== undefined) user.Bio = String(req.body.bio || '').trim() || null;
     if (req.body.gender !== undefined) user.Gender = String(req.body.gender || '').trim() || null;
-    if (req.body.birthday !== undefined) user.Birthday = req.body.birthday ? String(req.body.birthday).trim() : null;
+    if (req.body.birthday !== undefined) {
+      const bdayStr = req.body.birthday ? String(req.body.birthday).trim() : null;
+      if (bdayStr) {
+        const bdayDate = new Date(bdayStr);
+        if (!isNaN(bdayDate.getTime())) {
+          const now = new Date();
+          now.setHours(23, 59, 59, 999);
+          if (bdayDate > now) {
+            return res.status(400).json({ error: 'Ngày sinh không thể là ngày trong tương lai.' });
+          }
+        }
+      }
+      user.Birthday = bdayStr;
+    }
     if (req.body.address !== undefined) user.Address = String(req.body.address || '').trim() || null;
     if (req.file) {
       const oldAvatar = user.Avatar;
