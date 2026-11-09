@@ -7,6 +7,8 @@ const { loginLimiter, otpLimiter, registerLimiter } = require('../middlewares/ra
 router.post('/register', registerLimiter, authController.register);
 router.post('/register/send-otp', otpLimiter, authController.sendRegistrationOtp);
 router.post('/register/verify-otp', authController.verifyRegistrationOtp);
+router.get('/check-username/:username', authController.checkUsername);
+router.post('/check-username', authController.checkUsername);
 router.post('/login', loginLimiter, authController.login);
 router.post('/firebase-phone-login', authController.firebasePhoneLogin);
 router.get('/me', authenticateToken, authController.getMe);

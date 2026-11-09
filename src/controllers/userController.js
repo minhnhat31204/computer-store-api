@@ -197,7 +197,16 @@ exports.updateProfile = async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Không tìm thấy người dùng.' });
 
     user.FullName = fullName;
-    if (req.body.username !== undefined) user.Username = String(req.body.username || '').trim() || null;
+    // ID người dùng là duy nhất và KHÔNG ĐƯỢC SỬA sau khi đã tạo
+    if (!user.Username && req.body.username) {
+      const cleanUsername = String(req.body.username).trim().toLowerCase().replace(/^@/, '');
+      if (/^[a-zA-Z0-9_]{3,30}$/.test(cleanUsername)) {
+        const existingU = await User.findOne({ where: { Username: cleanUsername } });
+        if (!existingU || existingU.UserID === user.UserID) {
+          user.Username = cleanUsername;
+        }
+      }
+    }
     if (req.body.bio !== undefined) user.Bio = String(req.body.bio || '').trim() || null;
     if (req.body.gender !== undefined) user.Gender = String(req.body.gender || '').trim() || null;
     if (req.body.birthday !== undefined) user.Birthday = req.body.birthday ? String(req.body.birthday).trim() : null;

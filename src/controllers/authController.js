@@ -57,9 +57,27 @@ exports.register = async (req, res) => {
     const existing = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(phone) } } });
     if (existing) return res.status(409).json({ error: 'Số điện thoại đã được đăng ký.' });
 
+    // Validate ID người dùng (Username) - Bắt buộc và duy nhất
+    const rawUsername = req.body.username || req.body.userId || '';
+    const customUsername = String(rawUsername).trim().toLowerCase().replace(/^@/, '');
+    if (!customUsername) {
+      return res.status(400).json({ error: 'Vui lòng nhập ID người dùng.' });
+    }
+    if (!/^[a-zA-Z0-9_]{3,30}$/.test(customUsername)) {
+      return res.status(400).json({ error: 'ID người dùng chỉ được chứa chữ cái, số và dấu gạch dưới (3 - 30 ký tự, không dấu cách).' });
+    }
+
+    const existingUsername = await User.findOne({ where: { Username: customUsername } });
+    if (existingUsername) {
+      return res.status(409).json({ error: 'ID người dùng này đã có người sử dụng. Vui lòng chọn ID khác.' });
+    }
+
     const passwordHash = await hashPassword(password);
+    const fullName = String(req.body.fullName || '').trim() || customUsername;
+
     const user = await User.create({
-      FullName: String(req.body.fullName || '').trim() || (phone ? `Khách hàng ${phone.slice(-4)}` : 'Khách hàng'),
+      FullName: fullName,
+      Username: customUsername,
       Email: email || null,
       Phone: phone || null,
       PasswordHash: passwordHash,
@@ -108,6 +126,29 @@ exports.verifyRegistrationOtp = async (req, res) => {
   }
 };
 
+exports.checkUsername = async (req, res) => {
+  try {
+    const raw = req.params.username || req.query.username || (req.body && req.body.username) || '';
+    const username = String(raw).trim().toLowerCase().replace(/^@/, '');
+    if (!username) {
+      return res.status(400).json({ available: false, error: 'Vui lòng nhập ID người dùng cần kiểm tra.' });
+    }
+    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
+      return res.json({
+        available: false,
+        message: 'ID người dùng chỉ được chứa chữ cái, số và dấu gạch dưới (3 - 30 ký tự).'
+      });
+    }
+    const existing = await User.findOne({ where: { Username: username } });
+    if (existing) {
+      return res.json({ available: false, message: 'ID người dùng này đã có người sử dụng.' });
+    }
+    return res.json({ available: true, message: 'ID người dùng hợp lệ và có thể sử dụng.' });
+  } catch (error) {
+    return sendError(res, error, 'Không kiểm tra được ID người dùng.');
+  }
+};
+
 // Phone is the primary login identifier; email remains supported for older app accounts.
 exports.login = async (req, res) => {
   try {
@@ -129,10 +170,14 @@ exports.login = async (req, res) => {
       });
     }
 
-    const isEmail = identifier.includes('@');
+    const isEmail = identifier.includes('@') && identifier.includes('.');
+    const cleanUsername = identifier.toLowerCase().replace(/^@/, '');
     const conditions = isEmail
       ? [{ Email: identifier.toLowerCase() }]
-      : [{ Phone: { [Op.in]: phoneLookupValues(identifier) } }];
+      : [
+          { Phone: { [Op.in]: phoneLookupValues(identifier) } },
+          { Username: cleanUsername }
+        ];
     const user = await User.findOne({ where: { [Op.or]: conditions } });
 
     if (!user) {
