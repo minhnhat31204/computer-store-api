@@ -6,6 +6,8 @@ const { loginLimiter, otpLimiter, registerLimiter } = require('../middlewares/ra
 // Khai báo đường dẫn đăng ký và đăng nhập (Áp dụng Rate Limiting chống Brute-Force)
 router.post('/register', registerLimiter, authController.register);
 router.post('/register/send-otp', otpLimiter, authController.sendRegistrationOtp);
+router.get('/check-phone/:phone', authController.checkPhone);
+router.post('/check-phone', authController.checkPhone);
 router.post('/register/verify-otp', authController.verifyRegistrationOtp);
 router.get('/check-username/:username', authController.checkUsername);
 router.post('/check-username', authController.checkUsername);
