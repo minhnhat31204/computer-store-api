@@ -23,6 +23,8 @@ router.post('/forgot-password/reset', authController.resetPassword);
 router.post('/verify-otp', authController.verifyOtp);
 router.post('/reset-password', authController.resetPasswordLegacy);
 router.post('/reset-password-otp', authController.resetPasswordOTP);
+router.post('/email/change/send-phone-otp', otpLimiter, authController.sendChangeEmailPhoneOtp);
+router.post('/email/change/verify-phone-otp', authController.verifyChangeEmailPhoneOtp);
 router.post('/email/send-otp', otpLimiter, authController.sendEmailVerificationOtp);
 router.post('/email/verify-otp', authController.verifyEmailOtp);
 

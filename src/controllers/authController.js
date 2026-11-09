@@ -371,6 +371,44 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+exports.sendChangeEmailPhoneOtp = async (req, res) => {
+  try {
+    const userId = Number(req.body.userId);
+    if (!userId) return res.status(400).json({ error: 'Thiếu thông tin người dùng.' });
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+    if (!user.Phone) return res.status(400).json({ error: 'Tài khoản chưa có số điện thoại để nhận mã OTP.' });
+
+    const phoneKey = `change-email:phone:${user.UserID}`;
+    const code = issueChallenge(phoneKey);
+    return res.json({
+      message: `Đã gửi mã OTP về số điện thoại ${user.Phone}.`,
+      otp: code,
+      phone: user.Phone
+    });
+  } catch (error) {
+    return sendError(res, error, 'Không gửi được mã xác thực qua số điện thoại.');
+  }
+};
+
+exports.verifyChangeEmailPhoneOtp = async (req, res) => {
+  try {
+    const userId = Number(req.body.userId);
+    const otp = String(req.body.otp || '').trim();
+    if (!userId || !otp) return res.status(400).json({ error: 'Vui lòng nhập mã OTP.' });
+    const phoneKey = `change-email:phone:${userId}`;
+    const record = checkChallenge(phoneKey, otp);
+    if (!record) return res.status(400).json({ error: 'Mã OTP không đúng hoặc đã hết hạn.' });
+
+    return res.json({
+      message: 'Xác thực số điện thoại thành công. Bạn có thể nhập địa chỉ email mới.',
+      verified: true
+    });
+  } catch (error) {
+    return sendError(res, error, 'Xác thực OTP thất bại.');
+  }
+};
+
 exports.sendEmailVerificationOtp = async (req, res) => {
   try {
     const userId = Number(req.body.userId);
@@ -388,7 +426,7 @@ exports.sendEmailVerificationOtp = async (req, res) => {
     if (existing && existing.UserID !== user.UserID) return res.status(409).json({ error: 'Email đã được dùng bởi tài khoản khác.' });
     const key = `email:${userId}:${email}`;
     await sendChallenge(key, (code) => sendEmail(email, code, 'Mã OTP xác minh email DEVORA'));
-    return res.json({ message: 'Đã gửi mã xác minh đến email.' });
+    return res.json({ message: 'Đã gửi mã xác minh đến email.', otp: code });
   } catch (error) {
     return sendError(res, error, 'Không gửi được mã email.');
   }
