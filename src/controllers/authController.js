@@ -374,7 +374,11 @@ exports.resetPassword = async (req, res) => {
 exports.sendEmailVerificationOtp = async (req, res) => {
   try {
     const userId = Number(req.body.userId);
-    const email = emailAddress(req.body.email);
+    const rawEmail = String(req.body.email || '').trim().toLowerCase();
+    if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(rawEmail)) {
+      return res.status(400).json({ error: 'Email xác minh phải đúng định dạng @gmail.com (ví dụ: example@gmail.com).' });
+    }
+    const email = emailAddress(rawEmail);
     const currentPassword = String(req.body.currentPassword || '');
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
@@ -393,7 +397,11 @@ exports.sendEmailVerificationOtp = async (req, res) => {
 exports.verifyEmailOtp = async (req, res) => {
   try {
     const userId = Number(req.body.userId);
-    const email = emailAddress(req.body.email);
+    const rawEmail = String(req.body.email || '').trim().toLowerCase();
+    if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(rawEmail)) {
+      return res.status(400).json({ error: 'Email xác minh phải đúng định dạng @gmail.com.' });
+    }
+    const email = emailAddress(rawEmail);
     const key = `email:${userId}:${email}`;
     if (!checkChallenge(key, req.body.otp)) return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn.' });
     const user = await User.findByPk(userId);
