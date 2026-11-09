@@ -95,15 +95,22 @@ exports.register = async (req, res) => {
 exports.checkPhone = async (req, res) => {
   try {
     const raw = req.params.phone || req.query.phone || (req.body && req.body.phone) || '';
-    const phone = normalizePhone(String(raw).trim());
-    if (!phone || phone.length < 9) {
-      return res.status(400).json({ available: false, error: 'Số điện thoại không hợp lệ.' });
+    const cleanRaw = String(raw).trim();
+    if (!cleanRaw || cleanRaw.length < 8) {
+      return res.status(400).json({ available: false, isDuplicate: false, error: 'Số điện thoại không hợp lệ.' });
     }
+    let phone;
+    try {
+      phone = normalizePhone(cleanRaw);
+    } catch {
+      return res.status(400).json({ available: false, isDuplicate: false, error: 'Số điện thoại không hợp lệ.' });
+    }
+
     const existing = await User.findOne({ where: { Phone: { [Op.in]: phoneLookupValues(phone) } } });
     if (existing) {
-      return res.json({ available: false, message: 'Số điện thoại này đã được đăng ký tài khoản.' });
+      return res.json({ available: false, isDuplicate: true, message: 'Số điện thoại này đã được đăng ký tài khoản.' });
     }
-    return res.json({ available: true, message: 'Số điện thoại hợp lệ và có thể đăng ký.' });
+    return res.json({ available: true, isDuplicate: false, message: 'Số điện thoại hợp lệ và có thể đăng ký.' });
   } catch (error) {
     return sendError(res, error, 'Không kiểm tra được số điện thoại.');
   }

@@ -19,14 +19,24 @@ function normalizePhone(value) {
   if (/^0\d{9}$/.test(digits)) normalized = digits;
   else if (/^84\d{9}$/.test(digits)) normalized = `0${digits.slice(2)}`;
   else if (/^\+84\d{9}$/.test(digits)) normalized = `0${digits.slice(3)}`;
-  else throw Object.assign(new Error('Số điện thoại Việt Nam không hợp lệ.'), { status: 400 });
+  else if (/^\+?\d{8,15}$/.test(digits)) normalized = digits;
+  else throw Object.assign(new Error('Số điện thoại không hợp lệ.'), { status: 400 });
   return normalized;
 }
 
 function phoneLookupValues(value) {
-  const normalized = normalizePhone(value);
-  const international = `+84${normalized.slice(1)}`;
-  return [...new Set([normalized, international, international.slice(1)])];
+  try {
+    const normalized = normalizePhone(value);
+    const set = new Set([normalized, String(value || '').trim()]);
+    if (/^0\d{9}$/.test(normalized)) {
+      const international = `+84${normalized.slice(1)}`;
+      set.add(international);
+      set.add(international.slice(1));
+    }
+    return [...set];
+  } catch {
+    return [String(value || '').trim()];
+  }
 }
 
 function otpDigest(code) {
