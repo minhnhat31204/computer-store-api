@@ -6,7 +6,7 @@ const User = sequelize.define('User', {
   PasswordHash: { type: DataTypes.STRING, allowNull: true },
   FullName: { type: DataTypes.STRING, allowNull: false },
   Username: { type: DataTypes.STRING, allowNull: true },
-  Bio: { type: DataTypes.STRING, allowNull: true },
+  Bio: { type: DataTypes.STRING(1000), allowNull: true },
   // Phone-first registrations have no email. Uniqueness is enforced by a filtered SQL index.
   Email: { type: DataTypes.STRING, allowNull: true },
   RecoveryEmail: { type: DataTypes.STRING, allowNull: true },

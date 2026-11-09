@@ -111,7 +111,13 @@ exports.update = async (req, res) => {
     }
     if (fields.Avatar !== undefined) user.Avatar = fields.Avatar;
     if (fields.Username !== undefined) user.Username = fields.Username;
-    if (fields.Bio !== undefined) user.Bio = fields.Bio;
+    if (fields.Bio !== undefined) {
+      const rawBio = String(fields.Bio || '').trim();
+      if (rawBio.length > 255) {
+        return res.status(400).json({ error: 'Tiểu sử không được dài quá 255 ký tự.' });
+      }
+      user.Bio = rawBio || null;
+    }
 
     // BẢO MẬT: CHỈ CÓ ADMIN THỰC SỰ MỚI ĐƯỢC PHÉP THAY ĐỔI ROLE
     if (requesterRole === 'admin') {
@@ -226,7 +232,13 @@ exports.updateProfile = async (req, res) => {
         }
       }
     }
-    if (req.body.bio !== undefined) user.Bio = String(req.body.bio || '').trim() || null;
+    if (req.body.bio !== undefined) {
+      const rawBio = String(req.body.bio || '').trim();
+      if (rawBio.length > 255) {
+        return res.status(400).json({ error: 'Tiểu sử không được dài quá 255 ký tự.' });
+      }
+      user.Bio = rawBio || null;
+    }
     if (req.body.gender !== undefined) user.Gender = String(req.body.gender || '').trim() || null;
     if (req.body.birthday !== undefined) {
       const bdayStr = req.body.birthday ? String(req.body.birthday).trim() : null;
@@ -266,6 +278,7 @@ exports.updateProfile = async (req, res) => {
     return res.json({ message: 'Đã cập nhật hồ sơ.', user: safeUser });
   } catch (error) {
     console.error('Lỗi updateProfile:', error);
-    return res.status(500).json({ error: 'Không cập nhật được hồ sơ.' });
+    const errorMsg = error?.errors?.[0]?.message || error?.message || 'Không cập nhật được hồ sơ.';
+    return res.status(500).json({ error: errorMsg });
   }
 };

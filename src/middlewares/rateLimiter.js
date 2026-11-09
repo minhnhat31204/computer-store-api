@@ -36,7 +36,7 @@ const registerLimiter = rateLimit({
 // 4. Giới hạn upload tệp / hình ảnh: tối đa 20 file trong 15 phút trên mỗi IP
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

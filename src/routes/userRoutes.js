@@ -36,7 +36,15 @@ function parseAvatar(req, res, next) {
 
 router.get('/', authenticateToken, requireAdmin, c.getAll);
 router.post('/', authenticateToken, requireAdmin, c.create);
-router.put('/:id/profile', authenticateToken, uploadLimiter, parseAvatar, c.updateProfile);
+function conditionalUploadLimiter(req, res, next) {
+  // Chi ap dung gioi han upload khi nguoi dung thuc su tai len anh dai dien moi
+  if (req.file) {
+    return uploadLimiter(req, res, next);
+  }
+  next();
+}
+
+router.put('/:id/profile', authenticateToken, parseAvatar, conditionalUploadLimiter, c.updateProfile);
 router.put('/:id', authenticateToken, c.update);
 router.put('/:id/role', authenticateToken, requireAdmin, c.updateRole);
 router.delete('/:id', authenticateToken, requireAdmin, c.delete);
