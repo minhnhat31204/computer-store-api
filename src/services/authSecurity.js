@@ -19,7 +19,6 @@ function normalizePhone(value) {
   if (/^0\d{9}$/.test(digits)) normalized = digits;
   else if (/^84\d{9}$/.test(digits)) normalized = `0${digits.slice(2)}`;
   else if (/^\+84\d{9}$/.test(digits)) normalized = `0${digits.slice(3)}`;
-  else if (/^\+?\d{8,15}$/.test(digits)) normalized = digits;
   else throw Object.assign(new Error('Số điện thoại không hợp lệ.'), { status: 400 });
   return normalized;
 }

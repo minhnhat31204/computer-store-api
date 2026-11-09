@@ -95,9 +95,9 @@ exports.register = async (req, res) => {
 exports.checkPhone = async (req, res) => {
   try {
     const raw = req.params.phone || req.query.phone || (req.body && req.body.phone) || '';
-    const cleanRaw = String(raw).trim();
-    if (!cleanRaw || cleanRaw.length < 8) {
-      return res.status(400).json({ available: false, isDuplicate: false, error: 'Số điện thoại không hợp lệ.' });
+    const cleanRaw = String(raw).trim().replace(/\D/g, '');
+    if (!cleanRaw || cleanRaw.length !== 10 || !cleanRaw.startsWith('0')) {
+      return res.status(400).json({ available: false, isDuplicate: false, error: 'Số điện thoại không hợp lệ (phải gồm đúng 10 số).' });
     }
     let phone;
     try {
