@@ -74,6 +74,12 @@ exports.update = async (req, res) => {
         });
       }
 
+      if (String(newPassword).length < 8) {
+        return res.status(400).json({ 
+          message: 'Mật khẩu mới phải có ít nhất 8 ký tự.' 
+        });
+      }
+
       const newCheck = await verifyPassword(String(newPassword), user.PasswordHash);
       if (newCheck.valid) {
         return res.status(400).json({ 
