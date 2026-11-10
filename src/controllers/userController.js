@@ -105,6 +105,11 @@ exports.update = async (req, res) => {
           if (bdayDate > now) {
             return res.status(400).json({ error: 'Ngày sinh không thể là ngày trong tương lai.' });
           }
+          const minDate = new Date(now.getFullYear() - 100, now.getMonth(), now.getDate());
+          minDate.setHours(0, 0, 0, 0);
+          if (bdayDate < minDate) {
+            return res.status(400).json({ error: 'Ngày sinh không được quá 100 năm so với hiện tại.' });
+          }
         }
       }
       user.Birthday = bdayStr;
@@ -249,6 +254,11 @@ exports.updateProfile = async (req, res) => {
           now.setHours(23, 59, 59, 999);
           if (bdayDate > now) {
             return res.status(400).json({ error: 'Ngày sinh không thể là ngày trong tương lai.' });
+          }
+          const minDate = new Date(now.getFullYear() - 100, now.getMonth(), now.getDate());
+          minDate.setHours(0, 0, 0, 0);
+          if (bdayDate < minDate) {
+            return res.status(400).json({ error: 'Ngày sinh không được quá 100 năm so với hiện tại.' });
           }
         }
       }
