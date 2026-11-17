@@ -89,6 +89,55 @@ function getVerifiedChallenge(key) {
   return record;
 }
 
+
+const emailChallenges = new Map();
+const EMAIL_OTP_TTL_MS = 20 * 1000; // 20 giây
+
+function issueEmailChallenge(key, fixedCode) {
+  const code = fixedCode == null ? String(crypto.randomInt(100000, 1000000)) : String(fixedCode);
+  const current = emailChallenges.get(key);
+  const now = Date.now();
+  if (current) {
+    const codes = current.codes || [];
+    if (!codes.includes(code)) {
+      codes.push(code);
+    }
+    emailChallenges.set(key, {
+      codes,
+      latestCode: code,
+      expiresAt: now + EMAIL_OTP_TTL_MS,
+      sentAt: now,
+      attempts: 0,
+      verified: false,
+    });
+  } else {
+    emailChallenges.set(key, {
+      codes: [code],
+      latestCode: code,
+      expiresAt: now + EMAIL_OTP_TTL_MS,
+      sentAt: now,
+      attempts: 0,
+      verified: false,
+    });
+  }
+  return code;
+}
+
+function checkEmailChallenge(key, code) {
+  const inputCode = String(code || '').trim();
+  if (!inputCode) return null;
+  const record = emailChallenges.get(key);
+  if (!record) return null;
+  const isMatch = Array.isArray(record.codes) && record.codes.includes(inputCode);
+  if (!isMatch) return null;
+  record.verified = true;
+  return record;
+}
+
+function consumeEmailChallenge(key) {
+  emailChallenges.delete(key);
+}
+
 function consumeChallenge(key) {
   challenges.delete(key);
 }
@@ -232,6 +281,7 @@ function clearLoginAttempts(identifier) {
 }
 
 module.exports = {
+  issueEmailChallenge, checkEmailChallenge, consumeEmailChallenge,
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
   getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
   hashPassword, verifyPassword,

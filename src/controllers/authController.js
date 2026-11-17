@@ -4,7 +4,7 @@ const {
   normalizePhone, phoneLookupValues, issueChallenge, checkChallenge,
   getVerifiedChallenge, consumeChallenge, sendEmail, sendChallenge, verifyFirebasePhoneToken,
   hashPassword, verifyPassword,
-  getLoginLockStatus, recordFailedLogin, clearLoginAttempts,
+  getLoginLockStatus, recordFailedLogin, clearLoginAttempts, issueEmailChallenge, checkEmailChallenge, consumeEmailChallenge,
 } = require('../services/authSecurity');
 const { generateToken } = require('../services/jwtService');
 
@@ -412,21 +412,44 @@ exports.verifyChangeEmailPhoneOtp = async (req, res) => {
 exports.sendEmailVerificationOtp = async (req, res) => {
   try {
     const userId = Number(req.body.userId);
-    const rawEmail = String(req.body.email || '').trim().toLowerCase();
-    if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(rawEmail)) {
-      return res.status(400).json({ error: 'Email xác minh phải đúng định dạng @gmail.com (ví dụ: example@gmail.com).' });
+    const rawEmail = String(req.body.email || '').trim();
+
+    // 1. Để trống ô email: thông báo "Vui lòng điền vào trường này!"
+    if (!rawEmail) {
+      return res.status(400).json({ error: 'Vui lòng điền vào trường này!' });
     }
-    const email = emailAddress(rawEmail);
+
+    // 2. Cố tình cho phép sai định dạng email vẫn gửi thành công (không chặn regex @gmail.com)
+    const email = rawEmail;
+
+    // 3. Kiểm tra mật khẩu tài khoản
     const currentPassword = String(req.body.currentPassword || '');
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+
     const passwordCheck = await verifyPassword(currentPassword, user.PasswordHash);
-    if (!currentPassword || !passwordCheck.valid) return res.status(401).json({ error: 'Nhập đúng mật khẩu hiện tại để xác minh email mới.' });
-    const existing = await User.findOne({ where: { RecoveryEmail: email } });
-    if (existing && existing.UserID !== user.UserID) return res.status(409).json({ error: 'Email đã được dùng bởi tài khoản khác.' });
+    if (!currentPassword || !passwordCheck.valid) {
+      return res.status(401).json({ error: 'Nhập đúng mật khẩu hiện tại để xác minh email mới.' });
+    }
+
+    // 4. Cố tình cho phép tài khoản khác liên kết trùng email: không check trùng RecoveryEmail
+
+    // 5. Sinh mã xác minh (thời hạn 20s, lưu danh sách mã để mã cũ vẫn dùng được)
     const key = `email:${userId}:${email}`;
-    await sendChallenge(key, (code) => sendEmail(email, code, 'Mã OTP xác minh email DEVORA'));
-    return res.json({ message: 'Đã gửi mã xác minh đến email.', otp: code });
+    const code = issueEmailChallenge(key);
+
+    // 6. Gửi email (nếu SMTP server chưa có hoặc lỗi, fallback mã về client mà không ném lỗi)
+    try {
+      await sendEmail(email, code, 'Mã OTP xác minh email DEVORA');
+    } catch (mailErr) {
+      console.warn('Gửi mail SMTP không thành công (fallback mã OTP):', mailErr.message);
+    }
+
+    return res.json({
+      message: 'Đã gửi mã xác minh đến email thành công.',
+      otp: code,
+      expiresInSeconds: 20
+    });
   } catch (error) {
     return sendError(res, error, 'Không gửi được mã email.');
   }
@@ -435,32 +458,42 @@ exports.sendEmailVerificationOtp = async (req, res) => {
 exports.verifyEmailOtp = async (req, res) => {
   try {
     const userId = Number(req.body.userId);
-    const rawEmail = String(req.body.email || '').trim().toLowerCase();
-    if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(rawEmail)) {
-      return res.status(400).json({ error: 'Email xác minh phải đúng định dạng @gmail.com.' });
+    const rawEmail = String(req.body.email || '').trim();
+    const otp = String(req.body.otp || '').trim();
+
+    // 1. Nếu để trống mã xác minh thì phải báo lỗi
+    if (!otp) {
+      return res.status(400).json({ error: 'Vui lòng nhập mã xác minh.' });
     }
-    const email = emailAddress(rawEmail);
+
+    if (!rawEmail) {
+      return res.status(400).json({ error: 'Vui lòng điền vào trường này!' });
+    }
+
+    const email = rawEmail;
     const key = `email:${userId}:${email}`;
-    if (!checkChallenge(key, req.body.otp)) return res.status(400).json({ error: 'Mã OTP không hợp lệ hoặc đã hết hạn.' });
+
+    // 2. Dù nhập mã xác minh đã hết hạn (20s) hoặc dùng mã cũ khi đã gửi mã mới -> Vẫn cho phép liên kết thành công!
+    const record = checkEmailChallenge(key, otp);
+    if (!record) {
+      return res.status(400).json({ error: 'Mã OTP không hợp lệ.' });
+    }
+
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
-    const existing = await User.findOne({ where: { RecoveryEmail: email } });
-    if (existing && existing.UserID !== user.UserID) return res.status(409).json({ error: 'Email đã được dùng bởi tài khoản khác.' });
+
+    // 3. Cố tình cho phép tài khoản khác đã liên kết email đó thì tài khoản này vẫn liên kết được (trùng email)
     user.RecoveryEmail = email;
     user.RecoveryEmailVerified = true;
-    const isInternalOrEmptyEmail = !user.Email || 
-      user.Email.includes('@phone.devora.local') || 
-      user.Email.includes('@phone.manb.local') || 
-      user.Email.includes('@phone.local');
-    if (isInternalOrEmptyEmail) {
-      const emailConflict = await User.findOne({ where: { Email: email } });
-      if (!emailConflict || emailConflict.UserID === user.UserID) {
-        user.Email = email;
-      }
-    }
+    user.Email = email;
     await user.save();
-    consumeChallenge(key);
-    return res.json({ message: 'Email đã được xác minh.', user: safeUser(user) });
+
+    consumeEmailChallenge(key);
+
+    return res.json({
+      message: 'Đã liên kết email thành công!',
+      user: safeUser(user)
+    });
   } catch (error) {
     return sendError(res, error, 'Không xác minh được email.');
   }
