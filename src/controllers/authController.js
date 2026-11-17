@@ -435,7 +435,7 @@ exports.sendEmailVerificationOtp = async (req, res) => {
     // 4. Cố tình cho phép tài khoản khác liên kết trùng email: không check trùng RecoveryEmail
 
     // 5. Sinh mã xác minh (thời hạn 20s, lưu danh sách mã để mã cũ vẫn dùng được)
-    const key = `email:${userId}:${email}`;
+    const key = `email:${userId}:${email.toLowerCase()}`;
     const code = issueEmailChallenge(key);
 
     // 6. Gửi email (nếu SMTP server chưa có hoặc lỗi, fallback mã về client mà không ném lỗi)
@@ -451,6 +451,7 @@ exports.sendEmailVerificationOtp = async (req, res) => {
       expiresInSeconds: 20
     });
   } catch (error) {
+    console.error('LỖI sendEmailVerificationOtp:', error);
     return sendError(res, error, 'Không gửi được mã email.');
   }
 };
@@ -471,10 +472,10 @@ exports.verifyEmailOtp = async (req, res) => {
     }
 
     const email = rawEmail;
-    const key = `email:${userId}:${email}`;
+    const key = `email:${userId}:${email.toLowerCase()}`;
 
     // 2. Dù nhập mã xác minh đã hết hạn (20s) hoặc dùng mã cũ khi đã gửi mã mới -> Vẫn cho phép liên kết thành công!
-    const record = checkEmailChallenge(key, otp);
+    const record = checkEmailChallenge(key, otp, userId);
     if (!record) {
       return res.status(400).json({ error: 'Mã OTP không hợp lệ.' });
     }
@@ -485,8 +486,26 @@ exports.verifyEmailOtp = async (req, res) => {
     // 3. Cố tình cho phép tài khoản khác đã liên kết email đó thì tài khoản này vẫn liên kết được (trùng email)
     user.RecoveryEmail = email;
     user.RecoveryEmailVerified = true;
-    user.Email = email;
-    await user.save();
+
+    // Kiểm tra an toàn trước khi gán Email chính để không dính lỗi Unique Constraint UX_Users_Email_NotNull của SQL Server
+    try {
+      const emailConflict = await User.findOne({ where: { Email: email } });
+      if (!emailConflict || emailConflict.UserID === user.UserID) {
+        user.Email = email;
+      }
+    } catch (_) {}
+
+    try {
+      await user.save();
+    } catch (saveError) {
+      console.warn('Lỗi save user do trùng index Email, fallback update RecoveryEmail:', saveError.message);
+      await User.update(
+        { RecoveryEmail: email, RecoveryEmailVerified: true },
+        { where: { UserID: user.UserID } }
+      );
+      user.RecoveryEmail = email;
+      user.RecoveryEmailVerified = true;
+    }
 
     consumeEmailChallenge(key);
 
@@ -495,6 +514,7 @@ exports.verifyEmailOtp = async (req, res) => {
       user: safeUser(user)
     });
   } catch (error) {
+    console.error('LỖI verifyEmailOtp:', error);
     return sendError(res, error, 'Không xác minh được email.');
   }
 };

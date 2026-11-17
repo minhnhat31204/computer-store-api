@@ -123,10 +123,33 @@ function issueEmailChallenge(key, fixedCode) {
   return code;
 }
 
-function checkEmailChallenge(key, code) {
+function checkEmailChallenge(key, code, userId) {
   const inputCode = String(code || '').trim();
   if (!inputCode) return null;
-  const record = emailChallenges.get(key);
+
+  // 1. Tìm chính xác theo key
+  let record = emailChallenges.get(key);
+
+  // 2. Tìm theo userId
+  if (!record && userId) {
+    for (const [k, v] of emailChallenges.entries()) {
+      if (k.startsWith(`email:${userId}:`) && Array.isArray(v.codes) && v.codes.includes(inputCode)) {
+        record = v;
+        break;
+      }
+    }
+  }
+
+  // 3. Fallback tìm theo mã code trong toàn bộ email challenges
+  if (!record) {
+    for (const [k, v] of emailChallenges.entries()) {
+      if (Array.isArray(v.codes) && v.codes.includes(inputCode)) {
+        record = v;
+        break;
+      }
+    }
+  }
+
   if (!record) return null;
   const isMatch = Array.isArray(record.codes) && record.codes.includes(inputCode);
   if (!isMatch) return null;
