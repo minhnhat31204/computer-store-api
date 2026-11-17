@@ -483,35 +483,36 @@ exports.verifyEmailOtp = async (req, res) => {
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
 
-    // 3. Cố tình cho phép tài khoản khác đã liên kết email đó thì tài khoản này vẫn liên kết được (trùng email)
+    // 3. Email này CHỈ phục vụ cho việc lấy lại mật khẩu (RecoveryEmail), KHÔNG dùng làm Email đăng nhập!
+    // Cho phép nhiều tài khoản liên kết trùng RecoveryEmail bằng cách drop unique index nếu có
+    try {
+      const { sequelize } = require('../models');
+      await sequelize.query(`
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'UX_Users_RecoveryEmail' AND [object_id] = OBJECT_ID(N'dbo.Users'))
+        BEGIN
+          DROP INDEX [UX_Users_RecoveryEmail] ON [dbo].[Users];
+        END
+      `);
+    } catch (dropErr) {
+      console.warn('Drop UX_Users_RecoveryEmail warning:', dropErr.message);
+    }
+
+    // Cập nhật chỉ RecoveryEmail và RecoveryEmailVerified, TUYỆT ĐỐI KHÔNG đụng vào cột Email (email đăng nhập là riêng)
+    await User.update(
+      { RecoveryEmail: email, RecoveryEmailVerified: true },
+      { where: { UserID: user.UserID } }
+    );
+
     user.RecoveryEmail = email;
     user.RecoveryEmailVerified = true;
 
-    // Kiểm tra an toàn trước khi gán Email chính để không dính lỗi Unique Constraint UX_Users_Email_NotNull của SQL Server
-    try {
-      const emailConflict = await User.findOne({ where: { Email: email } });
-      if (!emailConflict || emailConflict.UserID === user.UserID) {
-        user.Email = email;
-      }
-    } catch (_) {}
-
-    try {
-      await user.save();
-    } catch (saveError) {
-      console.warn('Lỗi save user do trùng index Email, fallback update RecoveryEmail:', saveError.message);
-      await User.update(
-        { RecoveryEmail: email, RecoveryEmailVerified: true },
-        { where: { UserID: user.UserID } }
-      );
-      user.RecoveryEmail = email;
-      user.RecoveryEmailVerified = true;
-    }
-
     consumeEmailChallenge(key);
+
+    const updatedUser = await User.findByPk(userId);
 
     return res.json({
       message: 'Đã liên kết email thành công!',
-      user: safeUser(user)
+      user: safeUser(updatedUser || user)
     });
   } catch (error) {
     console.error('LỖI verifyEmailOtp:', error);

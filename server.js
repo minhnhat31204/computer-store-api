@@ -227,14 +227,13 @@ async function ensurePhoneOnlyEmailSchema() {
       .map(batch => batch.trim())
       .filter(Boolean);
     for (const batch of batches) await sequelize.query(batch);
-    // Tự động đồng bộ Email = RecoveryEmail nếu Email còn trống hoặc là email tạm
+    // Xóa UNIQUE INDEX trên RecoveryEmail để cho phép nhiều tài khoản liên kết cùng email khôi phục (RecoveryEmail)
     try {
       await sequelize.query(`
-        UPDATE [dbo].[Users]
-        SET [Email] = [RecoveryEmail]
-        WHERE ([Email] IS NULL OR [Email] LIKE N'%@phone.%')
-          AND [RecoveryEmail] IS NOT NULL
-          AND [RecoveryEmailVerified] = 1;
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE [name] = N'UX_Users_RecoveryEmail' AND [object_id] = OBJECT_ID(N'dbo.Users'))
+        BEGIN
+          DROP INDEX [UX_Users_RecoveryEmail] ON [dbo].[Users];
+        END
       `);
     } catch (_) {}
   } catch (err) {
