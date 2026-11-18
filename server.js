@@ -264,16 +264,32 @@ async function ensureVouchersStatus() {
     const { Voucher } = require('./src/models');
     if (!Voucher) return;
 
+    // Đảm bảo có cột Quantity trong CSDL SQL Server
+    try {
+      await sequelize.query(`
+        IF COL_LENGTH(N'dbo.Vouchers', N'Quantity') IS NULL
+        BEGIN
+          ALTER TABLE [dbo].[Vouchers] ADD [Quantity] INT NULL;
+        END
+      `);
+    } catch (_) {}
+
     // 1 voucher hết hạn sử dụng không áp dụng được (TEST)
     await Voucher.update(
-      { ExpiryDate: '2024-10-30 23:59:59', IsActive: true },
+      { ExpiryDate: '2024-10-30 23:59:59', IsActive: true, Quantity: 10 },
       { where: { Code: 'TEST' } }
     );
 
-    // Các voucher còn hạn sử dụng và áp dụng được bình thường (SALE20, SUMMER2026)
+    // Voucher SALE20: Còn hạn dùng và có số lượng (50 lượt)
     await Voucher.update(
-      { ExpiryDate: '2026-12-31 23:59:59', IsActive: true },
-      { where: { Code: ['SALE20', 'SUMMER2026'] } }
+      { ExpiryDate: '2026-12-31 23:59:59', IsActive: true, Quantity: 50 },
+      { where: { Code: 'SALE20' } }
+    );
+
+    // Voucher SUMMER2026: Còn hạn dùng và có số lượng (100 lượt)
+    await Voucher.update(
+      { ExpiryDate: '2026-12-31 23:59:59', IsActive: true, Quantity: 100 },
+      { where: { Code: 'SUMMER2026' } }
     );
   } catch (err) {
     console.warn('ensureVouchersStatus warning:', err.message);

@@ -8,6 +8,7 @@ const Voucher = sequelize.define('Voucher', {
   ImageUrl: { type: DataTypes.STRING },
   DiscountPercentage: { type: DataTypes.FLOAT },
   MaxDiscountAmount: { type: DataTypes.DECIMAL(18, 2) },
+  Quantity: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null },
   ExpiryDate: { 
     type: DataTypes.DATE,
     get() {
@@ -22,5 +23,3 @@ const Voucher = sequelize.define('Voucher', {
 }, { timestamps: false });
 
 module.exports = Voucher;
-
-

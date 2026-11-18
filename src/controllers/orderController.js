@@ -299,6 +299,10 @@ exports.create = async (req, res) => {
         return res.status(400).json({ error: 'Mã giảm giá không tồn tại hoặc đã ngừng áp dụng.' });
       }
 
+      if (voucher.Quantity !== null && voucher.Quantity !== undefined && Number(voucher.Quantity) <= 0) {
+        return res.status(400).json({ error: 'Mã giảm giá đã hết lượt sử dụng.' });
+      }
+
       if (voucher.ExpiryDate) {
         const expiresAt = new Date(voucher.ExpiryDate);
         if (!Number.isNaN(expiresAt.getTime())) {
@@ -369,6 +373,17 @@ exports.create = async (req, res) => {
         Note: PaymentMethod === 'COD' ? 'Đơn hàng COD - Chờ thanh toán khi nhận hàng' : 'Đơn hàng được tạo'
       }, { transaction });
       await OrderItem.bulkCreate(orderItemsData.map((item) => ({ ...item, OrderID: order.OrderID })), { transaction });
+      if (resolvedVoucherId) {
+        const v = await Voucher.findByPk(resolvedVoucherId, { transaction });
+        if (v && v.Quantity !== null && v.Quantity !== undefined) {
+          if (v.Quantity <= 0) {
+            const error = new Error(`Mã giảm giá "${v.Code}" đã hết lượt sử dụng.`);
+            error.statusCode = 400;
+            throw error;
+          }
+          await v.decrement('Quantity', { by: 1, transaction });
+        }
+      }
       if (effectiveUserId) await CartItemDB.destroy({ where: { UserID: effectiveUserId }, transaction });
       return order;
     });

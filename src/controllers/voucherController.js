@@ -68,6 +68,10 @@ exports.validateVoucher = async (req, res) => {
       return res.status(400).json({ valid: false, message: `Mã giảm giá "${voucher.Code}" hiện đã tạm ngưng hoặc không còn hiệu lực.` });
     }
 
+    if (voucher.Quantity !== null && voucher.Quantity !== undefined && Number(voucher.Quantity) <= 0) {
+      return res.status(400).json({ valid: false, message: `Mã giảm giá "${voucher.Code}" đã hết lượt sử dụng.` });
+    }
+
     if (voucher.ExpiryDate) {
       const expiry = new Date(voucher.ExpiryDate);
       if (!Number.isNaN(expiry.getTime())) {
@@ -108,6 +112,9 @@ exports.createVoucher = async (req, res) => {
     const expiryDate = req.body.ExpiryDate ? String(req.body.ExpiryDate).trim() : null;
     const isActive = req.body.IsActive !== undefined ? Boolean(req.body.IsActive) : true;
     const imageUrl = req.body.ImageUrl ? String(req.body.ImageUrl).trim() : null;
+    const quantity = req.body.Quantity !== undefined && req.body.Quantity !== '' && req.body.Quantity !== null
+      ? Math.max(0, parseInt(req.body.Quantity, 10))
+      : null;
 
     if (!code) {
       return res.status(400).json({ message: 'Mã giảm giá không được để trống.' });
@@ -139,7 +146,8 @@ exports.createVoucher = async (req, res) => {
       MaxDiscountAmount: maxDiscountAmount,
       ExpiryDate: expiryDate || null,
       IsActive: isActive,
-      ImageUrl: imageUrl
+      ImageUrl: imageUrl,
+      Quantity: quantity
     });
 
     res.status(201).json(newVoucher);
@@ -208,6 +216,18 @@ exports.updateVoucher = async (req, res) => {
 
     if (req.body.ImageUrl !== undefined) {
       updateData.ImageUrl = req.body.ImageUrl ? String(req.body.ImageUrl).trim() : null;
+    }
+
+    if (req.body.Quantity !== undefined) {
+      if (req.body.Quantity === '' || req.body.Quantity === null) {
+        updateData.Quantity = null;
+      } else {
+        const q = parseInt(req.body.Quantity, 10);
+        if (Number.isNaN(q) || q < 0) {
+          return res.status(400).json({ message: 'Số lượng voucher không hợp lệ.' });
+        }
+        updateData.Quantity = q;
+      }
     }
 
     await voucher.update(updateData);
