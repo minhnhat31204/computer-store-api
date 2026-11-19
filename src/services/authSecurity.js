@@ -9,8 +9,8 @@ const admin = require('firebase-admin');
 const scrypt = promisify(crypto.scrypt);
 const challenges = new Map();
 const OTP_TTL_MS = 5 * 60 * 1000;
-const OTP_RESEND_MS = 60 * 1000;
-const OTP_MAX_ATTEMPTS = 5;
+const OTP_RESEND_MS = 0; // Cho phép gửi lại OTP liên tục không phải chờ
+const OTP_MAX_ATTEMPTS = 50;
 
 function normalizePhone(value) {
   const raw = String(value || '').trim();
@@ -44,7 +44,7 @@ function otpDigest(code) {
 
 function issueChallenge(key, fixedCode) {
   const current = challenges.get(key);
-  if (current && Date.now() - current.sentAt < OTP_RESEND_MS) {
+  if (current && OTP_RESEND_MS > 0 && Date.now() - current.sentAt < OTP_RESEND_MS) {
     const remaining = Math.max(1, Math.ceil((OTP_RESEND_MS - (Date.now() - current.sentAt)) / 1000));
     const error = new Error(`Vui lòng nhập mã OTP hiện tại và đợi ${remaining}s trước khi nhấn gửi OTP mới.`);
     error.status = 429;
@@ -52,10 +52,14 @@ function issueChallenge(key, fixedCode) {
     throw error;
   }
   const code = fixedCode == null ? String(crypto.randomInt(100000, 1000000)) : String(fixedCode);
+  const now = Date.now();
+  const digests = (current && Array.isArray(current.digests)) ? current.digests : (current && current.digest ? [current.digest] : []);
+  digests.push(otpDigest(code));
   challenges.set(key, {
     digest: otpDigest(code),
-    expiresAt: Date.now() + OTP_TTL_MS,
-    sentAt: Date.now(),
+    digests,
+    expiresAt: now + OTP_TTL_MS,
+    sentAt: now,
     attempts: 0,
     verified: false,
   });
@@ -70,7 +74,9 @@ function checkChallenge(key, code) {
   }
   record.attempts += 1;
   const supplied = otpDigest(code);
-  if (supplied.length !== record.digest.length || !crypto.timingSafeEqual(supplied, record.digest)) {
+  const matchesLatest = supplied.length === record.digest.length && crypto.timingSafeEqual(supplied, record.digest);
+  const matchesAny = Array.isArray(record.digests) && record.digests.some(d => supplied.length === d.length && crypto.timingSafeEqual(supplied, d));
+  if (!matchesLatest && !matchesAny) {
     if (record.attempts >= OTP_MAX_ATTEMPTS) {
       challenges.delete(key);
     }

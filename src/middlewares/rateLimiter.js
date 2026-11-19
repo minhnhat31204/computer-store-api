@@ -1,9 +1,9 @@
 const rateLimit = require('express-rate-limit');
 
-// 1. Giới hạn đăng nhập: tối đa 5 lần thử trong 5 phút trên mỗi IP
+// 1. Giới hạn đăng nhập: nới rộng phục vụ kiểm thử
 const loginLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  max: 5,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -11,21 +11,13 @@ const loginLimiter = rateLimit({
   }
 });
 
-// 2. Giới hạn gửi OTP: tối đa 3 lần yêu cầu trong 10 phút trên mỗi IP
-const otpLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    error: 'Bạn đã yêu cầu gửi mã OTP quá nhiều lần. Vui lòng đợi 10 phút trước khi thử lại.'
-  }
-});
+// 2. Giới hạn gửi OTP: Cho phép gửi OTP nhiều lần tự do theo yêu cầu kiểm thử
+const otpLimiter = (req, res, next) => next();
 
-// 3. Giới hạn đăng ký tài khoản: tối đa 10 tài khoản mỗi giờ trên mỗi IP
+// 3. Giới hạn đăng ký tài khoản: nới rộng phục vụ kiểm thử
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 10,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
