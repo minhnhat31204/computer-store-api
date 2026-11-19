@@ -173,7 +173,15 @@ exports.updateRole = async (req, res) => {
 
 exports.delete = async (req, res) => {
   try {
-    const userId = req.params.id;
+    const targetUserId = Number(req.params.id);
+    const requesterRole = String(req.user?.role || req.user?.Role || '').toLowerCase();
+    const requesterId = Number(req.user?.userId || req.user?.UserID || 0);
+
+    if (requesterRole !== 'admin' && requesterId !== targetUserId) {
+      return res.status(403).json({ error: 'Bạn không có quyền xóa tài khoản của người khác.' });
+    }
+
+    const userId = targetUserId;
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({ error: 'Không tìm thấy người dùng.' });

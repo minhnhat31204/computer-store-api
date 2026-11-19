@@ -44,10 +44,21 @@ function conditionalUploadLimiter(req, res, next) {
   next();
 }
 
+function verifyUserOwnershipOrAdmin(req, res, next) {
+  const targetUserId = Number(req.params.id);
+  const requesterRole = String(req.user?.role || req.user?.Role || '').toLowerCase();
+  const requesterId = Number(req.user?.userId || req.user?.UserID || 0);
+
+  if (requesterRole !== 'admin' && requesterId !== targetUserId) {
+    return res.status(403).json({ error: 'Bạn không có quyền thao tác trên tài khoản khác.' });
+  }
+  next();
+}
+
 router.put('/:id/profile', authenticateToken, parseAvatar, conditionalUploadLimiter, c.updateProfile);
 router.put('/:id', authenticateToken, c.update);
 router.put('/:id/role', authenticateToken, requireAdmin, c.updateRole);
-router.delete('/:id', authenticateToken, requireAdmin, c.delete);
+router.delete('/:id', authenticateToken, verifyUserOwnershipOrAdmin, c.delete);
 router.post('/check-phone', userController.checkPhone);
 
 module.exports = router;
