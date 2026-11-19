@@ -72,8 +72,13 @@ exports.register = async (req, res) => {
       return res.status(409).json({ error: 'ID người dùng này đã có người sử dụng. Vui lòng chọn ID khác.' });
     }
 
+    const rawFullName = req.body.fullName || req.body.FullName || '';
+    const fullName = String(rawFullName).trim();
+    if (!fullName) {
+      return res.status(400).json({ error: 'Vui lòng nhập Tên hiển thị.' });
+    }
+
     const passwordHash = await hashPassword(password);
-    const fullName = String(req.body.fullName || '').trim() || customUsername;
 
     const user = await User.create({
       FullName: fullName,
