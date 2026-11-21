@@ -131,11 +131,11 @@ exports.cancelByUser = async (req, res) => {
       const isCod = String(order.PaymentMethod || '').trim().toLowerCase() === 'cod';
       const canCancel = isCod
         ? ['pending', 'confirmed', 'processing', 'preparing', 'ready'].includes(status)
-        : status === 'pending';
+        : ['pending', 'awaitingpayment', 'paymentpending', 'payment'].includes(status);
       if (!canCancel) {
         const error = new Error(isCod
           ? 'Chỉ có thể hủy đơn COD trước khi chuyển sang trạng thái đang giao.'
-          : 'Chỉ có thể hủy đơn chưa thanh toán đang chờ xác nhận.');
+          : 'Chỉ có thể hủy đơn chưa thanh toán hoặc đang chờ xác nhận.');
         error.statusCode = 409;
         throw error;
       }
@@ -192,7 +192,7 @@ exports.getStatusHistory = async (req, res) => {
 
 exports.updateStatus = async (req, res) => {
   try {
-    const allowedStatuses = new Set(['Pending', 'Confirmed', 'Processing', 'Shipping', 'Delivered', 'Cancelled', 'Returned', 'RefundPending', 'Pending Refund']);
+    const allowedStatuses = new Set(['Pending', 'Confirmed', 'Processing', 'Shipping', 'Delivered', 'Cancelled', 'Returned', 'RefundPending', 'Pending Refund', 'AwaitingPayment', 'Payment']);
     const status = String(req.body.Status || '').trim();
     if (!allowedStatuses.has(status)) {
       return res.status(400).json({ error: 'Tiến độ đơn hàng không hợp lệ.' });
@@ -363,11 +363,12 @@ exports.create = async (req, res) => {
       // Bảo mật chống Price Tampering: BẮT BUỘC dùng calculatedTotal tính từ giá thực của sản phẩm trong DB + phí vận chuyển
       const finalTotalAmount = calculatedTotal;
 
+      const isPayOS = String(PaymentMethod || '').trim().toLowerCase() === 'payos';
       const order = await Order.create({
         UserID: effectiveUserId,
         TotalAmount: finalTotalAmount,
         PaymentMethod: PaymentMethod || 'COD',
-        Status: 'Pending',
+        Status: isPayOS ? 'AwaitingPayment' : 'Pending',
         InventoryReserved: true,
         RecipientName,
         RecipientPhone,
@@ -640,7 +641,12 @@ exports.handlePayOSWebhook = async (req, res) => {
     if (webhookData.code === '00' && payment.Status !== 'PAID') {
       await payment.update({ Status: 'PAID', PaidAt: new Date() });
       const order = await Order.findByPk(payment.OrderID);
-      if (order) await notifyOrderPaid(order);
+      if (order) {
+        if (String(order.Status || '').toLowerCase() === 'awaitingpayment') {
+          await order.update({ Status: 'Pending' });
+        }
+        await notifyOrderPaid(order);
+      }
     }
     return res.status(200).json({ success: true });
   } catch (err) {
@@ -676,7 +682,12 @@ exports.getPaymentStatus = async (req, res) => {
           if (payOSLink.orderCode === orderCode && payOSLink.status === 'PAID' && paidAmount === expectedAmount) {
             await payment.update({ Status: 'PAID', PaidAt: new Date() });
             const paidOrder = await Order.findByPk(payment.OrderID);
-            if (paidOrder) await notifyOrderPaid(paidOrder);
+            if (paidOrder) {
+              if (String(paidOrder.Status || '').toLowerCase() === 'awaitingpayment') {
+                await paidOrder.update({ Status: 'Pending' });
+              }
+              await notifyOrderPaid(paidOrder);
+            }
           } else if (payOSLink.orderCode === orderCode && ['CANCELLED', 'EXPIRED', 'FAILED'].includes(payOSLink.status)) {
             const finalStatus = payOSLink.status === 'CANCELLED' ? 'CANCELLED' : 'FAILED';
             const syncResult = await sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
@@ -687,7 +698,8 @@ exports.getPaymentStatus = async (req, res) => {
               }
               await currentPayment.update({ Status: finalStatus }, { transaction });
               let changed = false;
-              if (payOSLink.status === 'EXPIRED' && String(currentOrder.Status || '').toLowerCase() === 'pending') {
+              const currentStatus = String(currentOrder.Status || '').trim().toLowerCase();
+              if (['EXPIRED', 'CANCELLED'].includes(payOSLink.status) && ['pending', 'awaitingpayment', 'paymentpending', 'payment'].includes(currentStatus)) {
                 changed = await changeOrderStatus(currentOrder, 'Cancelled', transaction, true);
               }
               return { payment: currentPayment, order: currentOrder, changed };
