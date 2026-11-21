@@ -264,12 +264,30 @@ async function ensureVouchersStatus() {
     const { Voucher } = require('./src/models');
     if (!Voucher) return;
 
-    // Đảm bảo có cột Quantity trong CSDL SQL Server
+    // Đảm bảo có các cột Quantity, Condition, MinOrderAmount trong CSDL SQL Server
     try {
       await sequelize.query(`
         IF COL_LENGTH(N'dbo.Vouchers', N'Quantity') IS NULL
         BEGIN
           ALTER TABLE [dbo].[Vouchers] ADD [Quantity] INT NULL;
+        END
+      `);
+    } catch (_) {}
+
+    try {
+      await sequelize.query(`
+        IF COL_LENGTH(N'dbo.Vouchers', N'Condition') IS NULL
+        BEGIN
+          ALTER TABLE [dbo].[Vouchers] ADD [Condition] NVARCHAR(255) NULL;
+        END
+      `);
+    } catch (_) {}
+
+    try {
+      await sequelize.query(`
+        IF COL_LENGTH(N'dbo.Vouchers', N'MinOrderAmount') IS NULL
+        BEGIN
+          ALTER TABLE [dbo].[Vouchers] ADD [MinOrderAmount] DECIMAL(18, 2) NULL;
         END
       `);
     } catch (_) {}

@@ -318,6 +318,16 @@ exports.create = async (req, res) => {
         const quantity = Number(item.Quantity ?? item.quantity ?? 1);
         return sum + Math.max(0, unitPrice) * Math.max(0, quantity);
       }, 0);
+
+      if (voucher.MinOrderAmount !== null && voucher.MinOrderAmount !== undefined) {
+        const minSpend = Number(voucher.MinOrderAmount);
+        if (Number.isFinite(minSpend) && minSpend > 0 && subtotal < minSpend) {
+          return res.status(400).json({
+            error: `Mã giảm giá "${voucher.Code}" chỉ áp dụng cho đơn hàng từ ${Math.round(minSpend).toLocaleString('vi-VN')} ₫ trở lên.`
+          });
+        }
+      }
+
       const percentageDiscount = subtotal * Math.max(0, Number(voucher.DiscountPercentage) || 0) / 100;
       const cap = Number(voucher.MaxDiscountAmount);
       discountAmount = Math.round(Math.min(subtotal, Number.isFinite(cap) && cap > 0 ? Math.min(percentageDiscount, cap) : percentageDiscount));

@@ -82,6 +82,16 @@ exports.validateVoucher = async (req, res) => {
       }
     }
 
+    if (voucher.MinOrderAmount !== null && voucher.MinOrderAmount !== undefined) {
+      const minSpend = Number(voucher.MinOrderAmount);
+      if (Number.isFinite(minSpend) && minSpend > 0 && subtotal < minSpend) {
+        return res.status(400).json({
+          valid: false,
+          message: `Mã giảm giá "${voucher.Code}" chỉ áp dụng cho đơn hàng từ ${Math.round(minSpend).toLocaleString('vi-VN')} ₫ trở lên (hiện tại: ${Math.round(subtotal).toLocaleString('vi-VN')} ₫).`
+        });
+      }
+    }
+
     const pct = Math.max(0, Number(voucher.DiscountPercentage) || 0);
     const cap = Number(voucher.MaxDiscountAmount);
     const percentageDiscount = (subtotal * pct) / 100;
@@ -115,6 +125,12 @@ exports.createVoucher = async (req, res) => {
     const quantity = req.body.Quantity !== undefined && req.body.Quantity !== '' && req.body.Quantity !== null
       ? Math.max(0, parseInt(req.body.Quantity, 10))
       : null;
+    const condition = req.body.Condition !== undefined && req.body.Condition !== '' && req.body.Condition !== null
+      ? String(req.body.Condition).trim()
+      : null;
+    let minOrderAmount = req.body.MinOrderAmount !== undefined && req.body.MinOrderAmount !== '' && req.body.MinOrderAmount !== null
+      ? Number(req.body.MinOrderAmount)
+      : null;
 
     if (!code) {
       return res.status(400).json({ message: 'Mã giảm giá không được để trống.' });
@@ -127,6 +143,19 @@ exports.createVoucher = async (req, res) => {
     }
     if (maxDiscountAmount !== null && (!Number.isFinite(maxDiscountAmount) || maxDiscountAmount < 0)) {
       return res.status(400).json({ message: 'Số tiền giảm tối đa không hợp lệ.' });
+    }
+    if (minOrderAmount !== null && (!Number.isFinite(minOrderAmount) || minOrderAmount < 0)) {
+      return res.status(400).json({ message: 'Số tiền đơn hàng tối thiểu không hợp lệ.' });
+    }
+
+    // Nếu người dùng nhập điều kiện dạng số mà chưa nhập MinOrderAmount thì tự gán MinOrderAmount
+    if (minOrderAmount === null && condition) {
+      const cleaned = condition.replace(/[.,\sđ₫kK]/g, '');
+      if (/^\d+$/.test(cleaned)) {
+        let val = parseInt(cleaned, 10);
+        if (/[kK]$/.test(condition.trim())) val *= 1000;
+        if (Number.isFinite(val) && val > 0) minOrderAmount = val;
+      }
     }
 
     const existing = await Voucher.findOne({
@@ -147,7 +176,9 @@ exports.createVoucher = async (req, res) => {
       ExpiryDate: expiryDate || null,
       IsActive: isActive,
       ImageUrl: imageUrl,
-      Quantity: quantity
+      Quantity: quantity,
+      Condition: condition,
+      MinOrderAmount: minOrderAmount
     });
 
     res.status(201).json(newVoucher);
@@ -227,6 +258,34 @@ exports.updateVoucher = async (req, res) => {
           return res.status(400).json({ message: 'Số lượng voucher không hợp lệ.' });
         }
         updateData.Quantity = q;
+      }
+    }
+
+    if (req.body.Condition !== undefined) {
+      updateData.Condition = req.body.Condition !== '' && req.body.Condition !== null
+        ? String(req.body.Condition).trim()
+        : null;
+    }
+
+    if (req.body.MinOrderAmount !== undefined) {
+      if (req.body.MinOrderAmount === '' || req.body.MinOrderAmount === null) {
+        updateData.MinOrderAmount = null;
+      } else {
+        const minVal = Number(req.body.MinOrderAmount);
+        if (!Number.isFinite(minVal) || minVal < 0) {
+          return res.status(400).json({ message: 'Số tiền đơn hàng tối thiểu không hợp lệ.' });
+        }
+        updateData.MinOrderAmount = minVal;
+      }
+    }
+
+    // Nếu sửa Condition dạng số mà chưa có MinOrderAmount thì tự gán MinOrderAmount
+    if (updateData.MinOrderAmount === undefined && updateData.Condition) {
+      const cleaned = updateData.Condition.replace(/[.,\sđ₫kK]/g, '');
+      if (/^\d+$/.test(cleaned)) {
+        let val = parseInt(cleaned, 10);
+        if (/[kK]$/.test(updateData.Condition.trim())) val *= 1000;
+        if (Number.isFinite(val) && val > 0) updateData.MinOrderAmount = val;
       }
     }
 

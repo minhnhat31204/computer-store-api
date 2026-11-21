@@ -9,6 +9,8 @@ const Voucher = sequelize.define('Voucher', {
   DiscountPercentage: { type: DataTypes.FLOAT },
   MaxDiscountAmount: { type: DataTypes.DECIMAL(18, 2) },
   Quantity: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null },
+  Condition: { type: DataTypes.STRING, allowNull: true, defaultValue: null },
+  MinOrderAmount: { type: DataTypes.DECIMAL(18, 2), allowNull: true, defaultValue: null },
   ExpiryDate: { 
     type: DataTypes.DATE,
     get() {
