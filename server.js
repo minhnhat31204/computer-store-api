@@ -314,11 +314,44 @@ async function ensureVouchersStatus() {
   }
 }
 
+async function ensureProductsSoldCount() {
+  try {
+    try {
+      await sequelize.query(`
+        IF COL_LENGTH(N'dbo.Products', N'SoldCount') IS NULL
+        BEGIN
+          ALTER TABLE [dbo].[Products] ADD [SoldCount] INT NOT NULL DEFAULT 0;
+        END
+      `);
+    } catch (_) {}
+
+    // Đồng bộ số lượng đã bán từ tất cả đơn hàng đã giao đi (Shipping, Delivered)
+    try {
+      await sequelize.query(`
+        UPDATE p
+        SET p.SoldCount = ISNULL((
+          SELECT SUM(oi.Quantity)
+          FROM OrderItems oi
+          JOIN Orders o ON oi.OrderID = o.OrderID
+          WHERE oi.ProductID = p.ProductID
+            AND LOWER(o.Status) IN ('shipping', 'shipped', 'delivering', 'delivered', 'completed')
+        ), 0)
+        FROM Products p;
+      `);
+    } catch (updateErr) {
+      console.warn('Sync SoldCount error:', updateErr.message);
+    }
+  } catch (err) {
+    console.warn('ensureProductsSoldCount warning:', err.message);
+  }
+}
+
 sequelize.authenticate()
   .then(() => sequelize.sync())
   .then(ensurePhoneOnlyEmailSchema)
   .then(ensureOrderInventoryColumn)
   .then(ensureReviewReplyColumns)
   .then(ensureVouchersStatus)
+  .then(ensureProductsSoldCount)
   .then(() => app.listen(PORT, '127.0.0.1', () => console.log(`API running on port ${PORT}`)))
   .catch(err => { console.error('Database startup error:', err); });

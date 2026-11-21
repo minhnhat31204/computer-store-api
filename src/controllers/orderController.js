@@ -91,6 +91,23 @@ async function persistPaidPaymentFromConflict(error) {
   if (order) await notifyOrderPaid(order);
 }
 
+async function syncOrderProductsSoldCount(orderId, transaction) {
+  if (!orderId) return;
+  const items = await OrderItem.findAll({ where: { OrderID: orderId }, attributes: ['ProductID'], transaction });
+  const productIds = [...new Set(items.map(it => Number(it.ProductID)).filter(id => Number.isInteger(id) && id > 0))];
+  for (const pid of productIds) {
+    const [results] = await sequelize.query(`
+      SELECT ISNULL(SUM(oi.Quantity), 0) AS SoldCount
+      FROM OrderItems oi
+      JOIN Orders o ON oi.OrderID = o.OrderID
+      WHERE oi.ProductID = :pid
+        AND LOWER(o.Status) IN ('shipping', 'shipped', 'delivering', 'delivered', 'completed')
+    `, { replacements: { pid }, transaction });
+    const sold = Number(results?.[0]?.SoldCount || 0);
+    await Product.update({ SoldCount: sold }, { where: { ProductID: pid }, transaction });
+  }
+}
+
 async function changeOrderStatus(order, status, transaction, payOSAlreadyResolved = false, actorUserId = null, note = null, allowPaidCancellation = false) {
   const previousValue = order.Status || null;
   const previousStatus = String(previousValue || '').trim().toLowerCase();
@@ -118,6 +135,9 @@ async function changeOrderStatus(order, status, transaction, payOSAlreadyResolve
     NewStatus: status,
     Note: note || null,
   }, { transaction });
+  await syncOrderProductsSoldCount(order.OrderID, transaction).catch((err) => {
+    console.warn('syncOrderProductsSoldCount error:', err.message);
+  });
   return true;
 }
 
@@ -977,6 +997,9 @@ exports.bulkUpdateOrderStatus = async (req, res) => {
             ChangedBy: req.user?.username || req.user?.FullName || 'Admin',
             CreatedAt: new Date()
           }, { transaction: t }).catch(() => {});
+          await syncOrderProductsSoldCount(order.OrderID, t).catch((err) => {
+            console.warn('syncOrderProductsSoldCount bulk error:', err.message);
+          });
           results.push(order.OrderID);
         }
       }

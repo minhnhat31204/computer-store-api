@@ -8,6 +8,7 @@ const Product = sequelize.define('Product', {
   Price: { type: DataTypes.DECIMAL(18, 2), allowNull: false },
   DiscountPrice: { type: DataTypes.DECIMAL(18, 2) },
   StockQuantity: { type: DataTypes.INTEGER, defaultValue: 0 },
+  SoldCount: { type: DataTypes.INTEGER, defaultValue: 0, allowNull: false },
   ImageUrl: { type: DataTypes.TEXT },
   CreatedAt: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   CategoryID: { type: DataTypes.INTEGER }, // FK
